@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "c:\\Ze_Je\\User\\Documents\\Cod\\Course-OOP-Equipment-rental\\BlazorApp\\BlazorApp.csproj": {}
+    "C:\\Ze_Je\\User\\Documents\\Cod\\Course-OOP-Equipment-rental\\BlazorApp\\BlazorApp.csproj": {}
   },
   "projects": {
-    "c:\\Ze_Je\\User\\Documents\\Cod\\Course-OOP-Equipment-rental\\BlazorApp\\BlazorApp.csproj": {
+    "C:\\Ze_Je\\User\\Documents\\Cod\\Course-OOP-Equipment-rental\\BlazorApp\\BlazorApp.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "c:\\Ze_Je\\User\\Documents\\Cod\\Course-OOP-Equipment-rental\\BlazorApp\\BlazorApp.csproj",
+        "projectUniqueName": "C:\\Ze_Je\\User\\Documents\\Cod\\Course-OOP-Equipment-rental\\BlazorApp\\BlazorApp.csproj",
         "projectName": "BlazorApp",
-        "projectPath": "c:\\Ze_Je\\User\\Documents\\Cod\\Course-OOP-Equipment-rental\\BlazorApp\\BlazorApp.csproj",
+        "projectPath": "C:\\Ze_Je\\User\\Documents\\Cod\\Course-OOP-Equipment-rental\\BlazorApp\\BlazorApp.csproj",
         "packagesPath": "C:\\Users\\Ze_Je\\.nuget\\packages\\",
-        "outputPath": "c:\\Ze_Je\\User\\Documents\\Cod\\Course-OOP-Equipment-rental\\BlazorApp\\obj\\",
+        "outputPath": "C:\\Ze_Je\\User\\Documents\\Cod\\Course-OOP-Equipment-rental\\BlazorApp\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\Ze_Je\\AppData\\Roaming\\NuGet\\NuGet.Config"
@@ -49,6 +49,16 @@
               "target": "Package",
               "version": "[10.0.3, )",
               "autoReferenced": true
+            },
+            "Microsoft.EntityFrameworkCore.Design": {
+              "include": "Runtime, Build, Native, ContentFiles, Analyzers, BuildTransitive",
+              "suppressParent": "All",
+              "target": "Package",
+              "version": "[10.0.3, )"
+            },
+            "Microsoft.EntityFrameworkCore.Sqlite": {
+              "target": "Package",
+              "version": "[10.0.3, )"
             }
           },
           "imports": [
