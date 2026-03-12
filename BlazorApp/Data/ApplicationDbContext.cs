@@ -9,8 +9,17 @@ namespace BlazorApp.Data
         {
         }
 
-        public DbSet<Vehicle> Vehicles { get; set; }
+        public DbSet<User> Users { get; set; }
+        public DbSet<Transport> Transports { get; set; }
         public DbSet<Bicycle> Bicycles { get; set; }
         public DbSet<Scooter> Scooters { get; set; }
+        public DbSet<RentalSession> RentalSessions { get; set; }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<Transport>().ToTable("Transports");
+            modelBuilder.Entity<Bicycle>().ToTable("Bicycles");
+            modelBuilder.Entity<Scooter>().ToTable("Scooters");
+        }
     }
 }

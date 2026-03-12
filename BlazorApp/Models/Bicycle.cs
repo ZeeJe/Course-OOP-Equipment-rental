@@ -1,8 +1,9 @@
 namespace BlazorApp.Models
 {
-    public class Bicycle : Vehicle
+    public class Bicycle : Transport
     {
-        public string BikeType { get; set; } = string.Empty; 
-        public int FrameSize { get; set; }
+        public string? FrameSize { get; set; }
+        public string? BrakeType { get; set; }
+        public bool HasBasket { get; set; }
     }
 }

@@ -1,8 +1,10 @@
 namespace BlazorApp.Models
 {
-    public class Scooter : Vehicle
+    public class Scooter : Transport
     {
-        public int BatteryCapacity { get; set; }
-        public int CurrentChargePercentage { get; set; } = 100;
+        public int? MotorPower { get; set; }
+        public string? FirmwareVersion { get; set; }
+        public int? MaxLoad { get; set; }
+        public int? SpeedLimit { get; set; }
     }
 }

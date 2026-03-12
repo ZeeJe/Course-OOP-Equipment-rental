@@ -1,0 +1,76 @@
+@page "/register"
+@rendermode InteractiveServer
+@using BlazorApp.Data
+@using BlazorApp.Models
+@using Microsoft.EntityFrameworkCore
+@inject ApplicationDbContext Db
+
+<PageTitle>Реєстрація клієнта</PageTitle>
+
+<h1>Реєстрація нового користувача</h1>
+<hr />
+
+<div class="card p-4 shadow-sm" style="max-width: 450px;">
+    <div class="mb-3">
+        <label class="form-label">Ваше ім'я або Нікнейм:</label>
+        <input @bind="newUser.Name" class="form-control" placeholder="Введіть ім'я..." />
+    </div>
+    
+    <div class="mb-3">
+        <label class="form-label">Початковий баланс (грн):</label>
+        <input type="number" @bind="newUser.Balance" class="form-control" />
+        <small class="text-muted">Даруємо 100 грн новим клієнтам!</small>
+    </div>
+    
+    <button class="btn btn-success w-100" @onclick="RegisterUser">Зареєструватися</button>
+</div>
+
+@if (successMessage != null)
+{
+    <div class="alert alert-success mt-4" style="max-width: 450px;">
+        <strong>✅ Успіх!</strong> @successMessage
+    </div>
+}
+
+@if (users != null && users.Count > 0)
+{
+    <h4 class="mt-5">Список клієнтів у базі:</h4>
+    <ul class="list-group" style="max-width: 450px;">
+        @foreach(var u in users)
+        {
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                @u.Name
+                <span class="badge bg-primary rounded-pill">@u.Balance грн</span>
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    private User newUser = new User { Balance = 100.0 };
+    private List<User>? users;
+    private string? successMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUsers();
+    }
+
+    private async Task LoadUsers()
+    {
+        users = await Db.Users.ToListAsync();
+    }
+
+    private async Task RegisterUser()
+    {
+        if (!string.IsNullOrWhiteSpace(newUser.Name))
+        {
+            Db.Users.Add(newUser);
+            await Db.SaveChangesAsync();
+            
+            successMessage = $"Користувача {newUser.Name} успішно додано до бази!";
+            newUser = new User { Balance = 100.0 }; // Очищаємо форму для наступного
+            await LoadUsers(); // Оновлюємо список знизу
+        }
+    }
+}

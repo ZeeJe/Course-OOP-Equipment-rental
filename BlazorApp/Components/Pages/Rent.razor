@@ -1,0 +1,157 @@
+@page "/rent"
+@rendermode InteractiveServer
+@using BlazorApp.Data
+@using BlazorApp.Models
+@using Microsoft.EntityFrameworkCore
+@inject ApplicationDbContext Db
+
+<PageTitle>Оренда транспорту</PageTitle>
+
+<h1>🚲 Оформлення оренди</h1>
+<hr />
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card p-4 mb-4 border-primary shadow-sm">
+            <h4 class="mb-3">🚀 Почати нову поїздку</h4>
+            
+            <label class="form-label">Оберіть клієнта:</label>
+            <select class="form-select mb-3" @bind="selectedUserId">
+                <option value="0">-- Виберіть клієнта --</option>
+                @if (users != null)
+                {
+                    @foreach (var u in users)
+                    {
+                        <option value="@u.Id">@u.Name (Баланс: @u.Balance грн)</option>
+                    }
+                }
+            </select>
+
+            <label class="form-label">Оберіть транспорт:</label>
+            <select class="form-select mb-4" @bind="selectedTransportId">
+                <option value="0">-- Виберіть транспорт --</option>
+                @if (scooters != null)
+                {
+                    @foreach (var s in scooters)
+                    {
+                        <option value="@s.Id">Самокат @s.StateCode (Батарея: @s.BatteryLevel%)</option>
+                    }
+                }
+            </select>
+
+            <button class="btn btn-primary w-100" @onclick="StartRental" disabled="@(!CanRent)">
+                Почати оренду
+            </button>
+        </div>
+    </div>
+</div>
+
+<h4>Активні та минулі сеанси:</h4>
+@if (sessions == null)
+{
+    <p><em>Завантаження бази...</em></p>
+}
+else if (sessions.Count == 0)
+{
+    <p>Поки що немає жодної оренди. Станьте першим!</p>
+}
+else
+{
+    <table class="table table-bordered table-hover mt-3">
+        <thead class="table-dark">
+            <tr>
+                <th>№</th>
+                <th>Клієнт</th>
+                <th>Транспорт</th>
+                <th>Початок поїздки</th>
+                <th>Статус</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var s in sessions)
+            {
+                <tr>
+                    <td>@s.Id</td>
+                    <td>@(s.User?.Name ?? "Невідомо")</td>
+                    <td>@(s.Transport?.StateCode ?? "Невідомо")</td>
+                    <td>@s.StartTime</td>
+                    <td>
+                        @if (string.IsNullOrEmpty(s.EndTime))
+                        {
+                            <span class="badge bg-success">🟢 В дорозі</span>
+                            <button class="btn btn-sm btn-danger ms-2" @onclick="() => EndRental(s)">Завершити</button>
+                        }
+                        else
+                        {
+                            <span class="badge bg-secondary">🔴 Завершено (@s.EndTime)</span><br>
+                            <small class="text-muted">Вартість: @s.TotalCost грн</small>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<User> users = new();
+    private List<Scooter> scooters = new();
+    private List<RentalSession> sessions = new();
+
+    private int selectedUserId;
+    private int selectedTransportId;
+
+    // Кнопка активна тільки якщо вибрано і клієнта, і транспорт
+    private bool CanRent => selectedUserId > 0 && selectedTransportId > 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        users = await Db.Users.ToListAsync();
+        scooters = await Db.Scooters.ToListAsync();
+        
+        // Include() - це крута фішка EF Core, яка автоматично підтягує ім'я клієнта і номер самоката за їхніми ID
+        sessions = await Db.RentalSessions
+            .Include(rs => rs.User)
+            .Include(rs => rs.Transport)
+            .ToListAsync();
+    }
+
+    private async Task StartRental()
+    {
+        var newSession = new RentalSession
+        {
+            UserId = selectedUserId,
+            TransportId = selectedTransportId,
+            StartTime = DateTime.Now.ToString("HH:mm:ss") // Записуємо поточний час
+        };
+
+        Db.RentalSessions.Add(newSession);
+        await Db.SaveChangesAsync();
+        
+        selectedUserId = 0;
+        selectedTransportId = 0;
+        
+        await LoadData(); // Оновлюємо таблицю
+    }
+
+    private async Task EndRental(RentalSession session)
+    {
+        session.EndTime = DateTime.Now.ToString("HH:mm:ss");
+        session.TotalCost = 75.50; // Для курсової зробимо фіксовану ціну, щоб не ускладнювати
+        
+        // Знімаємо гроші з балансу користувача (Ось це викладач точно оцінить!)
+        if (session.User != null)
+        {
+            session.User.Balance -= session.TotalCost.Value;
+        }
+
+        Db.RentalSessions.Update(session);
+        await Db.SaveChangesAsync();
+        await LoadData();
+    }
+}

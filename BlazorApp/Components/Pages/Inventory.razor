@@ -1,0 +1,228 @@
+@page "/inventory"
+@rendermode InteractiveServer
+@using BlazorApp.Data
+@using BlazorApp.Models
+@using Microsoft.EntityFrameworkCore
+@inject ApplicationDbContext Db
+
+<PageTitle>Керування прокатом</PageTitle>
+
+<h1>🚲 Інвентар та Прокат</h1>
+<hr />
+
+<div class="mb-4">
+    <button class="btn btn-success me-2" @onclick="AddTestScooter">➕ Додати самокат</button>
+    <button class="btn btn-info" @onclick="AddTestBicycle">➕ Додати велосипед</button>
+</div>
+
+@if (transportToRent != null)
+{
+    <div class="card border-primary mb-4 shadow-lg">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">Оформлення оренди: Транспорт #@transportToRent.Id (@transportToRent.StateCode)</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <label class="form-label">Оберіть клієнта:</label>
+                    <select class="form-select" @bind="selectedUserId">
+                        <option value="0">-- Виберіть клієнта --</option>
+                        @foreach (var u in users)
+                        {
+                            <option value="@u.Id">@u.Name (Баланс: @u.Balance грн)</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Оберіть тариф:</label>
+                    <select class="form-select" @bind="selectedTariff">
+                        <option value="">-- Виберіть тариф --</option>
+                        <option value="minute">Похвилинний (3 грн/хв)</option>
+                        <option value="hour">Годинний (150 грн/год)</option>
+                        <option value="day">На день (500 грн/день)</option>
+                    </select>
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    <button class="btn btn-success w-100 me-2" disabled="@(!CanRent)" @onclick="ConfirmRent">✅ Підтвердити</button>
+                    <button class="btn btn-secondary w-100" @onclick="CancelRent">❌ Скасувати</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<h4 class="mb-3">Доступний транспорт:</h4>
+@if (transports == null)
+{
+    <p><em>Завантаження даних...</em></p>
+}
+else
+{
+    <table class="table table-striped table-hover align-middle mb-5">
+        <thead class="table-dark">
+            <tr>
+                <th>ID</th>
+                <th>Тип</th>
+                <th>Держ. номер</th>
+                <th>Характеристики</th>
+                <th>Дія</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var t in transports)
+            {
+                <tr>
+                    <td>@t.Id</td>
+                    <td>
+                        @if (t is Scooter) { <span>🛴 Самокат</span> }
+                        else if (t is Bicycle) { <span>🚲 Велосипед</span> }
+                    </td>
+                    <td><strong>@t.StateCode</strong></td>
+                    <td>
+                        @if (t is Scooter s)
+                        {
+                            <span class="text-success">Батарея: @s.BatteryLevel%</span> <br> 
+                            <small class="text-muted">Двигун: @s.MotorPower Вт</small>
+                        }
+                        else if (t is Bicycle b)
+                        {
+                            <span class="text-primary">Рама: @b.FrameSize</span> <br>
+                            <small class="text-muted">Кошик: @(b.HasBasket ? "Є" : "Немає")</small>
+                        }
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-primary" @onclick="() => OpenRentForm(t)">🔑 Орендувати</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+<hr />
+<h4 class="mb-3">⏱ Активні та завершені поїздки:</h4>
+@if (sessions != null && sessions.Any())
+{
+    <table class="table table-bordered">
+        <thead class="table-secondary">
+            <tr>
+                <th>Клієнт</th>
+                <th>Транспорт</th>
+                <th>Час початку</th>
+                <th>Статус</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var s in sessions)
+            {
+                <tr>
+                    <td>@(s.User?.Name ?? "Невідомо")</td>
+                    <td>@(s.Transport?.StateCode ?? "Невідомо")</td>
+                    <td>@s.StartTime</td>
+                    <td>
+                        @if (string.IsNullOrEmpty(s.EndTime))
+                        {
+                            <span class="badge bg-warning text-dark me-2">В оренді</span>
+                            <button class="btn btn-sm btn-danger" @onclick="() => EndRental(s)">Завершити поїздку</button>
+                        }
+                        else
+                        {
+                            <span class="badge bg-secondary">Завершено (@s.EndTime)</span>
+                            <strong class="ms-2 text-success">Оплачено: @s.TotalCost грн</strong>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<Transport>? transports;
+    private List<User> users = new();
+    private List<RentalSession> sessions = new();
+    
+    // Змінні для форми
+    private Transport? transportToRent = null;
+    private int selectedUserId = 0;
+    private string selectedTariff = "";
+
+    private bool CanRent => selectedUserId > 0 && !string.IsNullOrEmpty(selectedTariff);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        // EF Core автоматично дістає і самокати, і велосипеди з базової таблиці!
+        transports = await Db.Transports.ToListAsync();
+        users = await Db.Users.ToListAsync();
+        sessions = await Db.RentalSessions.Include(rs => rs.User).Include(rs => rs.Transport).ToListAsync();
+    }
+
+    // --- Логіка оренди ---
+    private void OpenRentForm(Transport t)
+    {
+        transportToRent = t;
+        selectedUserId = 0;
+        selectedTariff = "";
+    }
+
+    private void CancelRent()
+    {
+        transportToRent = null;
+    }
+
+    private async Task ConfirmRent()
+    {
+        if (transportToRent != null && CanRent)
+        {
+            var session = new RentalSession
+            {
+                UserId = selectedUserId,
+                TransportId = transportToRent.Id,
+                StartTime = DateTime.Now.ToString("HH:mm:ss")
+            };
+
+            Db.RentalSessions.Add(session);
+            await Db.SaveChangesAsync();
+            
+            transportToRent = null; // Ховаємо форму
+            await LoadData(); // Оновлюємо всі таблиці на екрані
+        }
+    }
+
+    private async Task EndRental(RentalSession session)
+    {
+        session.EndTime = DateTime.Now.ToString("HH:mm:ss");
+        session.TotalCost = 45.00; // Імітуємо розрахунок вартості
+        
+        if (session.User != null)
+        {
+            session.User.Balance -= session.TotalCost.Value; // Знімаємо кошти
+        }
+
+        Db.RentalSessions.Update(session);
+        await Db.SaveChangesAsync();
+        await LoadData();
+    }
+
+    // --- Логіка додавання інвентарю ---
+    private async Task AddTestScooter()
+    {
+        var newScooter = new Scooter { StateCode = "AA" + new Random().Next(1000, 9999) + "XX", BatteryLevel = 100, MotorPower = 350 };
+        Db.Scooters.Add(newScooter);
+        await Db.SaveChangesAsync();
+        await LoadData();
+    }
+
+    private async Task AddTestBicycle()
+    {
+        var newBicycle = new Bicycle { StateCode = "BIKE-" + new Random().Next(100, 999), FrameSize = "L", HasBasket = true };
+        Db.Bicycles.Add(newBicycle);
+        await Db.SaveChangesAsync();
+        await LoadData();
+    }
+}
