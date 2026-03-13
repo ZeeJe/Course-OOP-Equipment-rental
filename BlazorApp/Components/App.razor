@@ -1,23 +1,70 @@
 ﻿<!DOCTYPE html>
-<html lang="en">
-
+<html lang="uk">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="/" />
-    <ResourcePreloader />
-    <link rel="stylesheet" href="@Assets["lib/bootstrap/dist/css/bootstrap.min.css"]" />
-    <link rel="stylesheet" href="@Assets["app.css"]" />
-    <link rel="stylesheet" href="@Assets["BlazorApp.styles.css"]" />
-    <ImportMap />
+    <link rel="stylesheet" href="lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="app.css" />
+    <link rel="stylesheet" href="BlazorApp.styles.css" />
     <link rel="icon" type="image/png" href="favicon.png" />
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <HeadOutlet />
 </head>
-
 <body>
     <Routes />
-    <ReconnectModal />
-    <script src="@Assets["_framework/blazor.web.js"]"></script>
-</body>
+    
+    <script src="_framework/blazor.web.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script>
+        let myMap = null;
 
+        window.renderMap = (transports, dotNetHelper) => {
+            let mapDiv = document.getElementById('mainMap');
+            if (!mapDiv) return; // Захист, якщо ми не на сторінці з картою
+
+            // Якщо карта вже існує (повернулися з іншої вкладки), видаляємо її перед малюванням нової
+            if (myMap !== null) {
+                myMap.remove();
+                myMap = null;
+            }
+
+            // Малюємо чисту карту (центр - Рівне)
+            myMap = L.map('mainMap').setView([50.6199, 26.2516], 13);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '© OpenStreetMap'
+            }).addTo(myMap);
+
+            let markersGroup = L.layerGroup().addTo(myMap);
+
+            transports.forEach(t => {
+                // Кольори залежно від статусу
+                let bgColor = t.status === 'in-use' ? '#ef4444' : (t.status === 'maintenance' ? '#f59e0b' : (t.type === 'Scooter' ? '#10b981' : '#8b5cf6'));
+                let emoji = t.type === 'Scooter' ? '🛴' : '🚲';
+                
+                let customIcon = L.divIcon({
+                    className: 'custom-pin',
+                    html: `<div style="background-color: ${bgColor}; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; border: 2px solid white; box-shadow: 0 0 10px rgba(0,0,0,0.5); cursor: pointer; transition: transform 0.2s;">${emoji}</div>`,
+                    iconSize: [32, 32],
+                    iconAnchor: [16, 16]
+                });
+
+                // Текст для підказки при наведенні
+                let statusText = t.status === 'in-use' ? '🔴 В оренді' : (t.status === 'maintenance' ? '🟠 Ремонт' : '🟢 Доступно');
+
+                let marker = L.marker([t.lat, t.lng], {icon: customIcon})
+                 // Tooltip показується просто при наведенні мишкою
+                 .bindTooltip(`<b>${t.code}</b><br/>${statusText}`, { direction: 'top', offset: [0, -15], className: 'custom-tooltip' })
+                 .addTo(markersGroup);
+
+                // По кліку викликаємо метод C# і передаємо йому ID транспорту
+                marker.on('click', () => {
+                    dotNetHelper.invokeMethodAsync('OpenPanelFromMap', t.id);
+                });
+            });
+        }
+    </script>
+</body>
 </html>

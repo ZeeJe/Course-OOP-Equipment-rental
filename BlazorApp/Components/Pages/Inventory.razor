@@ -1,245 +1,439 @@
 @page "/inventory"
 @rendermode InteractiveServer
+@implements IDisposable
 @using BlazorApp.Data
 @using BlazorApp.Models
 @using Microsoft.EntityFrameworkCore
 @inject ApplicationDbContext Db
+@inject IJSRuntime JS
+@inject NavigationManager NavManager
 
-<PageTitle>Керування прокатом</PageTitle>
+<PageTitle>Інвентар та Карта</PageTitle>
 
-<h1>Інвентар та Прокат</h1>
-<hr />
+<style>
+    .overlay {
+        position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+        background: rgba(0,0,0,0.5); z-index: 1040; display: none; backdrop-filter: blur(3px);
+    }
+    .overlay.open { display: block; }
+    
+    .side-panel {
+        position: fixed; top: 0; right: -450px; width: 400px; height: 100vh;
+        background: white; box-shadow: -5px 0 25px rgba(0,0,0,0.3);
+        transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1); z-index: 1050;
+        padding: 30px; overflow-y: auto; display: flex; flex-direction: column;
+    }
+    .side-panel.open { right: 0; }
 
-<div class="mb-4">
-    <button class="btn btn-success me-2" @onclick="AddTestScooter">Додати самокат</button>
-    <button class="btn btn-info" @onclick="AddTestBicycle">Додати велосипед</button>
+    .sortable-header {
+        cursor: pointer;
+        user-select: none;
+        transition: background-color 0.2s;
+    }
+    .sortable-header:hover {
+        background-color: #343a40; 
+    }
+    .sortable-header-light:hover {
+        background-color: #e9ecef;
+    }
+</style>
+
+<div class="d-flex justify-content-center gap-3 mb-3 mt-3">
+    <button class="btn @(mapFilter == "all" ? "btn-primary" : "btn-outline-primary") rounded-pill px-4 fw-bold shadow-sm" @onclick="@(() => ChangeMapFilter("all"))">Всі транспорти</button>
+    <button class="btn @(mapFilter == "scooters" ? "btn-success" : "btn-outline-success") rounded-pill px-4 fw-bold shadow-sm" @onclick="@(() => ChangeMapFilter("scooters"))">Самокати</button>
+    <button class="btn @(mapFilter == "bicycles" ? "btn-info" : "btn-outline-info") rounded-pill px-4 fw-bold shadow-sm" @onclick="@(() => ChangeMapFilter("bicycles"))">Велосипеди</button>
 </div>
 
-@if (transportToRent != null)
-{
-    <div class="card border-primary mb-4 shadow-lg">
-        <div class="card-header bg-primary text-white">
-            <h5 class="mb-0">Оформлення оренди: Транспорт #@transportToRent.Id (@transportToRent.StateCode)</h5>
+<div id="mainMap" style="height: 450px; width: 100%; border-radius: 16px; border: 1px solid #333;" class="mb-4 shadow-lg"></div>
+
+
+<div class="overlay @(transportToRent != null ? "open" : "")" @onclick="CancelRent"></div>
+
+<div class="side-panel @(transportToRent != null ? "open" : "")">
+    @if (transportToRent != null)
+    {
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h4 class="fw-bold mb-0">Оформлення оренди</h4>
+            <button type="button" class="btn-close" aria-label="Close" @onclick="CancelRent"></button>
         </div>
-        <div class="card-body">
-            <div class="row">
-                <div class="col-md-4">
-                    <label class="form-label">Оберіть клієнта:</label>
-                    <select class="form-select" @bind="selectedUserId">
-                        <option value="0">-- Виберіть клієнта --</option>
-                        @foreach (var u in users)
-                        {
-                            <option value="@u.Id">@u.Name (Баланс: @u.Balance грн)</option>
-                        }
-                    </select>
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label">Оберіть тариф:</label>
-                    <select class="form-select" @bind="selectedTariff">
-                        <option value="">-- Виберіть тариф --</option>
-                        <option value="minute">Похвилинний (3 грн/хв)</option>
-                        <option value="hour">Годинний (150 грн/год)</option>
-                        <option value="day">На день (500 грн/день)</option>
-                    </select>
-                </div>
-                <div class="col-md-4 d-flex align-items-end">
-                    <button class="btn btn-success w-100 me-2" disabled="@(!CanRent)" @onclick="ConfirmRent">Підтвердити</button>
-                    <button class="btn btn-secondary w-100" @onclick="CancelRent">Скасувати</button>
-                </div>
-            </div>
+
+        <div class="card border-0 bg-light p-3 mb-4 rounded-4 shadow-sm">
+            <h5 class="text-primary mb-3">
+                @(transportToRent is Scooter ? "Самокат" : "Велосипед") #@transportToRent.Id
+            </h5>
+            <p class="mb-1"><strong>Держ. номер:</strong> <span class="badge bg-secondary">@transportToRent.StateCode</span></p>
+            
+            @if (transportToRent is Scooter s)
+            {
+                <p class="mb-1"><strong>Батарея:</strong> <span class="text-success fw-bold">@s.BatteryLevel%</span></p>
+                <p class="mb-0"><strong>Двигун:</strong> @s.MotorPower Вт</p>
+            }
+            else if (transportToRent is Bicycle b)
+            {
+                <p class="mb-1"><strong>Розмір рами:</strong> @b.FrameSize</p>
+                <p class="mb-0"><strong>Кошик:</strong> @(b.HasBasket ? "Є в наявності" : "Немає")</p>
+            }
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label fw-bold">Оберіть клієнта:</label>
+            <select class="form-select form-select-lg" @bind="selectedUserId">
+                <option value="0">-- Виберіть клієнта --</option>
+                @foreach (var u in users)
+                {
+                    <option value="@u.Id">@u.Name (Баланс: @u.Balance грн)</option>
+                }
+            </select>
+        </div>
+
+        <div class="mb-4">
+            <label class="form-label fw-bold">Оберіть тариф:</label>
+            <select class="form-select form-select-lg" @bind="selectedTariff">
+                <option value="">-- Виберіть тариф --</option>
+                <option value="minute">Похвилинний (3 грн/хв)</option>
+                <option value="hour">Годинний (150 грн/год)</option>
+                <option value="day">На день (500 грн/день)</option>
+            </select>
+        </div>
+
+        <div class="mt-auto">
+            <button class="btn btn-primary btn-lg w-100 mb-2 shadow-sm" disabled="@(!CanRent)" @onclick="ConfirmRent">Підтвердити оренду</button>
+            <button class="btn btn-outline-secondary btn-lg w-100" @onclick="CancelRent">Скасувати</button>
+        </div>
+    }
+</div>
+<div class="card shadow-sm border-0 rounded-4 overflow-hidden mb-5">
+    
+    <div class="card-header bg-white p-3 d-flex justify-content-between align-items-center" style="cursor: pointer;" @onclick="ToggleTable">
+        <h4 class="fw-bold mb-0 text-dark d-flex align-items-center">
+            <span class="bi @(isTableExpanded ? "bi-chevron-down" : "bi-chevron-right") text-primary me-3"></span>
+            Список транспорту
+        </h4>
+        
+        <div @onclick:stopPropagation="true">
+            <button class="btn btn-sm btn-success me-2 shadow-sm" @onclick="AddTestScooter">Додати самокат</button>
+            <button class="btn btn-sm btn-info shadow-sm text-white" @onclick="AddTestBicycle">Додати велосипед</button>
         </div>
     </div>
-}
 
-<h4 class="mb-3">Доступний транспорт:</h4>
-@if (transports == null)
-{
-    <p><em>Завантаження даних...</em></p>
-}
-else
-{
-    <table class="table table-striped table-hover align-middle mb-5">
-        <thead class="table-dark">
-            <tr>
-                <th>ID</th>
-                <th>Тип</th>
-                <th>Держ. номер</th>
-                <th>Характеристики</th>
-                <th>Статус</th>
-                <th>Дія</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var t in transports)
+    @if (isTableExpanded)
+    {
+        <div class="card-body p-0">
+            @if (transports == null)
             {
-                <tr>
-                    <td>@t.Id</td>
-                    <td>
-                        @if (t is Scooter) { <span>Самокат</span> }
-                        else if (t is Bicycle) { <span>Велосипед</span> }
-                    </td>
-                    <td><strong>@t.StateCode</strong></td>
-                    <td>
-                        @if (t is Scooter s)
-                        {
-                            <span class="text-success">Батарея: @s.BatteryLevel%</span> <br> 
-                            <small class="text-muted">Двигун: @s.MotorPower Вт</small>
-                        }
-                        else if (t is Bicycle b)
-                        {
-                            <span class="text-primary">Рама: @b.FrameSize</span> <br>
-                            <small class="text-muted">Кошик: @(b.HasBasket ? "Є" : "Немає")</small>
-                        }
-                    </td>
-                    <td>
-                        @{
-                            // Логіка статусів: перевіряємо чи в оренді, чи на ремонті
-                            bool isInUse = sessions != null && sessions.Any(s => s.TransportId == t.Id && string.IsNullOrEmpty(s.EndTime));
-                            bool isMaintenance = t.StateCode != null && (t.StateCode.ToLower().Contains("рем") || t.StateCode.ToLower().Contains("maint"));
-                        }
-                        @if (isInUse)
-                        {
-                            <span class="badge bg-danger">В оренді</span>
-                        }
-                        else if (isMaintenance)
-                        {
-                            <span class="badge bg-warning text-dark">На обслуговуванні</span>
-                        }
-                        else
-                        {
-                            <span class="badge bg-success">Доступно</span>
-                        }
-                    </td>
-                    <td>
-                        @{
-                            // Якщо транспорт зайнятий або зламаний, кнопка "Орендувати" блокується
-                            bool isDisabled = isInUse || isMaintenance;
-                        }
-                        <button class="btn btn-sm @(isDisabled ? "btn-secondary" : "btn-primary")" 
-                                disabled="@isDisabled" 
-                                @onclick="() => OpenRentForm(t)">
-                            @(isInUse ? "Зайнято" : (isMaintenance ? "Ремонт" : "Орендувати"))
-                        </button>
-                    </td>
-                </tr>
+                <div class="p-4 text-center text-muted"><em>Завантаження даних...</em></div>
             }
-        </tbody>
-    </table>
-}
+            else
+            {
+                <table class="table table-striped table-hover align-middle mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th class="sortable-header px-4" @onclick="@(() => SortBy("ID"))">
+                                ID <span class="bi @GetSortIcon("ID") ms-1 text-white-50" style="font-size: 0.8rem;"></span>
+                            </th>
+                            <th class="sortable-header" @onclick="@(() => SortBy("Type"))">
+                                Тип <span class="bi @GetSortIcon("Type") ms-1 text-white-50" style="font-size: 0.8rem;"></span>
+                            </th>
+                            <th class="sortable-header" @onclick="@(() => SortBy("StateCode"))">
+                                Держ. номер <span class="bi @GetSortIcon("StateCode") ms-1 text-white-50" style="font-size: 0.8rem;"></span>
+                            </th>
+                            <th>Характеристики</th>
+                            <th class="sortable-header" @onclick="@(() => SortBy("Status"))">
+                                Статус <span class="bi @GetSortIcon("Status") ms-1 text-white-50" style="font-size: 0.8rem;"></span>
+                            </th>
+                            <th class="text-end px-4">Дія</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var t in GetSortedTransports())
+                        {
+                            <tr>
+                                <td class="px-4 text-muted">@t.Id</td>
+                                <td>
+                                    @if (t is Scooter) { <strong>Самокат</strong> }
+                                    else if (t is Bicycle) { <strong>Велосипед</strong> }
+                                </td>
+                                <td><span class="badge bg-light text-dark border">@t.StateCode</span></td>
+                                <td>
+                                    @if (t is Scooter s)
+                                    {
+                                        <span class="text-success">Батарея: @s.BatteryLevel%</span> <br> 
+                                        <small class="text-muted">Двигун: @s.MotorPower Вт</small>
+                                    }
+                                    else if (t is Bicycle b)
+                                    {
+                                        <span class="text-primary">Рама: @b.FrameSize</span> <br>
+                                        <small class="text-muted">Кошик: @(b.HasBasket ? "Є" : "Немає")</small>
+                                    }
+                                </td>
+                                <td>
+                                    @{
+                                        bool isInUse = sessions != null && sessions.Any(s => s.TransportId == t.Id && string.IsNullOrEmpty(s.EndTime));
+                                        bool isMaintenance = t.StateCode != null && (t.StateCode.ToLower().Contains("рем") || t.StateCode.ToLower().Contains("maint"));
+                                    }
+                                    @if (isInUse)
+                                    {
+                                        <span class="badge bg-danger">В оренді</span>
+                                    }
+                                    else if (isMaintenance)
+                                    {
+                                        <span class="badge bg-warning text-dark">На обслуговуванні</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-success">Доступно</span>
+                                    }
+                                </td>
+                                <td class="text-end px-4">
+                                    @{ bool isDisabled = isInUse || isMaintenance; }
+                                    <button class="btn btn-sm @(isDisabled ? "btn-secondary" : "btn-primary") rounded-pill px-3" 
+                                            disabled="@isDisabled" 
+                                            @onclick="() => OpenRentForm(t)">
+                                        @(isInUse ? "Зайнято" : (isMaintenance ? "Ремонт" : "Орендувати"))
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    }
+</div>
 
-<hr />
-<h4 class="mb-3">Активні та завершені поїздки:</h4>
-@if (sessions != null && sessions.Any())
-{
-    <table class="table table-bordered">
-        <thead class="table-secondary">
-            <tr>
-                <th>Клієнт</th>
-                <th>Транспорт</th>
-                <th>Час початку</th>
-                <th>Статус</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var s in sessions)
-            {
-                <tr>
-                    <td>@(s.User?.Name ?? "Невідомо")</td>
-                    <td>@(s.Transport?.StateCode ?? "Невідомо")</td>
-                    <td>@s.StartTime</td>
-                    <td>
-                        @if (string.IsNullOrEmpty(s.EndTime))
-                        {
-                            <span class="badge bg-warning text-dark me-2">В оренді</span>
-                            <button class="btn btn-sm btn-danger" @onclick="() => EndRental(s)">Завершити поїздку</button>
-                        }
-                        else
-                        {
-                            <span class="badge bg-secondary">Завершено (@s.EndTime)</span>
-                            <strong class="ms-2 text-success">Оплачено: @s.TotalCost грн</strong>
-                        }
-                    </td>
-                </tr>
-            }
-        </tbody>
-    </table>
-}
+<div class="card shadow-sm border-0 rounded-4 overflow-hidden mb-5">
+    <div class="card-header bg-white p-3">
+        <h4 class="fw-bold mb-0 text-dark">Активні та завершені поїздки</h4>
+    </div>
+    <div class="card-body p-0">
+        @if (sessions != null && sessions.Any())
+        {
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="sortable-header sortable-header-light px-4" @onclick="@(() => SortSessions("User"))">
+                            Клієнт <span class="bi @GetSessionSortIcon("User") ms-1 text-muted" style="font-size: 0.8rem;"></span>
+                        </th>
+                        <th class="sortable-header sortable-header-light" @onclick="@(() => SortSessions("Transport"))">
+                            Транспорт <span class="bi @GetSessionSortIcon("Transport") ms-1 text-muted" style="font-size: 0.8rem;"></span>
+                        </th>
+                        <th class="sortable-header sortable-header-light" @onclick="@(() => SortSessions("Start"))">
+                            Час початку <span class="bi @GetSessionSortIcon("Start") ms-1 text-muted" style="font-size: 0.8rem;"></span>
+                        </th>
+                        <th class="sortable-header sortable-header-light text-end px-4" @onclick="@(() => SortSessions("Status"))">
+                            Статус <span class="bi @GetSessionSortIcon("Status") ms-1 text-muted" style="font-size: 0.8rem;"></span>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var s in GetSortedSessions())
+                    {
+                        <tr>
+                            <td class="px-4"><strong>@(s.User?.Name ?? "Невідомо")</strong></td>
+                            <td><span class="badge bg-secondary">@(s.Transport?.StateCode ?? "Невідомо")</span></td>
+                            <td>@s.StartTime</td>
+                            <td class="text-end px-4">
+                                @if (string.IsNullOrEmpty(s.EndTime))
+                                {
+                                    <span class="badge bg-warning text-dark me-2">В оренді</span>
+                                    <button class="btn btn-sm btn-danger rounded-pill px-3" @onclick="() => EndRental(s)">Завершити</button>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-light text-dark border me-2">Завершено (@s.EndTime)</span>
+                                    <strong class="text-success">@s.TotalCost грн</strong>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
 
 @code {
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "rent")]
+    public int? RequestToRentId { get; set; }
+
     private List<Transport>? transports;
     private List<User> users = new();
     private List<RentalSession> sessions = new();
     
-    // Змінні для форми
+    private string mapFilter = "all"; 
+    private DotNetObjectReference<Inventory>? objRef; 
+
+    // Змінні для верхньої таблиці (Транспорт)
+    private bool isTableExpanded = true;
+    private string currentSortColumn = "ID";
+    private bool isSortAscending = true;
+
+    // Змінні для нижньої таблиці (Сеанси)
+    private string sessionSortCol = "ID";
+    private bool sessionSortAsc = false;
+
     private Transport? transportToRent = null;
     private int selectedUserId = 0;
     private string selectedTariff = "";
-
     private bool CanRent => selectedUserId > 0 && !string.IsNullOrEmpty(selectedTariff);
 
     protected override async Task OnInitializedAsync()
     {
+        objRef = DotNetObjectReference.Create(this);
         await LoadData();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (RequestToRentId.HasValue)
+        {
+            if (transports == null) await LoadData();
+            var transport = transports?.FirstOrDefault(t => t.Id == RequestToRentId.Value);
+
+            if (transport != null)
+            {
+                bool isInUse = sessions?.Any(s => s.TransportId == transport.Id && string.IsNullOrEmpty(s.EndTime)) ?? false;
+                bool isMaintenance = transport.StateCode?.ToLower().Contains("рем") ?? false;
+
+                if (!isInUse && !isMaintenance)
+                {
+                    OpenRentForm(transport);
+                }
+            }
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (transports != null) await UpdateMap();
     }
 
     private async Task LoadData()
     {
         transports = await Db.Transports.ToListAsync();
         users = await Db.Users.ToListAsync();
-        sessions = await Db.RentalSessions.Include(rs => rs.User).Include(rs => rs.Transport).OrderByDescending(s => s.Id).ToListAsync();
+        sessions = await Db.RentalSessions.Include(rs => rs.User).Include(rs => rs.Transport).ToListAsync();
     }
 
-    // --- Логіка оренди ---
-    private void OpenRentForm(Transport t)
+    // ================= ЛОГІКА СОРТУВАННЯ ТРАНСПОРТУ =================
+    private void ToggleTable() => isTableExpanded = !isTableExpanded;
+
+    private void SortBy(string columnName)
     {
-        transportToRent = t;
-        selectedUserId = 0;
-        selectedTariff = "";
+        if (currentSortColumn == columnName) isSortAscending = !isSortAscending;
+        else { currentSortColumn = columnName; isSortAscending = true; }
     }
 
-    private void CancelRent()
+    private string GetSortIcon(string columnName)
     {
-        transportToRent = null;
+        if (currentSortColumn != columnName) return "bi-arrow-down-up";
+        return isSortAscending ? "bi-arrow-up" : "bi-arrow-down";
     }
 
-    private async Task ConfirmRent()
+    private IEnumerable<Transport> GetSortedTransports()
     {
-        if (transportToRent != null && CanRent)
+        if (transports == null) return Enumerable.Empty<Transport>();
+
+        var query = transports.Where(t => 
+            mapFilter == "all" || 
+            (mapFilter == "scooters" && t is Scooter) || 
+            (mapFilter == "bicycles" && t is Bicycle));
+
+        return currentSortColumn switch
         {
-            var session = new RentalSession
-            {
-                UserId = selectedUserId,
-                TransportId = transportToRent.Id,
-                StartTime = DateTime.Now.ToString("HH:mm:ss")
-            };
+            "Type" => isSortAscending ? query.OrderBy(t => t.GetType().Name) : query.OrderByDescending(t => t.GetType().Name),
+            "StateCode" => isSortAscending ? query.OrderBy(t => t.StateCode) : query.OrderByDescending(t => t.StateCode),
+            "Status" => isSortAscending
+                ? query.OrderBy(t => sessions.Any(s => s.TransportId == t.Id && string.IsNullOrEmpty(s.EndTime)) ? 2 : (t.StateCode?.ToLower().Contains("рем") == true ? 1 : 0))
+                : query.OrderByDescending(t => sessions.Any(s => s.TransportId == t.Id && string.IsNullOrEmpty(s.EndTime)) ? 2 : (t.StateCode?.ToLower().Contains("рем") == true ? 1 : 0)),
+            _ => isSortAscending ? query.OrderBy(t => t.Id) : query.OrderByDescending(t => t.Id)
+        };
+    }
 
-            Db.RentalSessions.Add(session);
-            await Db.SaveChangesAsync();
+    // ================= ЛОГІКА СОРТУВАННЯ СЕАНСІВ =================
+    private void SortSessions(string col)
+    {
+        if (sessionSortCol == col) sessionSortAsc = !sessionSortAsc;
+        else { sessionSortCol = col; sessionSortAsc = true; }
+    }
+
+    private string GetSessionSortIcon(string colName)
+    {
+        if (sessionSortCol != colName) return "bi-arrow-down-up";
+        return sessionSortAsc ? "bi-arrow-up" : "bi-arrow-down";
+    }
+
+    private IEnumerable<RentalSession> GetSortedSessions()
+    {
+        if (sessions == null) return Enumerable.Empty<RentalSession>();
+
+        return sessionSortCol switch {
+            "User" => sessionSortAsc ? sessions.OrderBy(s => s.User?.Name) : sessions.OrderByDescending(s => s.User?.Name),
+            "Transport" => sessionSortAsc ? sessions.OrderBy(s => s.Transport?.StateCode) : sessions.OrderByDescending(s => s.Transport?.StateCode),
+            "Start" => sessionSortAsc ? sessions.OrderBy(s => s.StartTime) : sessions.OrderByDescending(s => s.StartTime),
+            "Status" => sessionSortAsc ? sessions.OrderBy(s => string.IsNullOrEmpty(s.EndTime) ? "0" : "1").ThenBy(s => s.EndTime) : sessions.OrderByDescending(s => string.IsNullOrEmpty(s.EndTime) ? "0" : "1").ThenByDescending(s => s.EndTime),
+            _ => sessionSortAsc ? sessions.OrderBy(s => s.Id) : sessions.OrderByDescending(s => s.Id)
+        };
+    }
+
+    // ===========================================================
+
+    private async Task ChangeMapFilter(string filter)
+    {
+        mapFilter = filter;
+        await UpdateMap();
+    }
+
+    private async Task UpdateMap()
+    {
+        if (transports == null) return;
+
+        var filteredForMap = transports.Where(t => 
+            mapFilter == "all" || 
+            (mapFilter == "scooters" && t is Scooter) || 
+            (mapFilter == "bicycles" && t is Bicycle)
+        ).ToList();
+
+        var mapData = filteredForMap.Select(t => {
+            bool isInUse = sessions.Any(s => s.TransportId == t.Id && string.IsNullOrEmpty(s.EndTime));
+            bool isMaintenance = t.StateCode != null && (t.StateCode.ToLower().Contains("рем") || t.StateCode.ToLower().Contains("maint"));
             
-            transportToRent = null; // Ховаємо форму
-            await LoadData(); // Оновлюємо всі таблиці на екрані
-        }
+            return new {
+                id = t.Id, 
+                lat = t.Latitude,
+                lng = t.Longitude,
+                code = t.StateCode,
+                type = t is Scooter ? "Scooter" : "Bicycle",
+                status = isInUse ? "in-use" : (isMaintenance ? "maintenance" : "available")
+            };
+        });
+
+        await JS.InvokeVoidAsync("renderMap", mapData, objRef);
     }
 
-    private async Task EndRental(RentalSession session)
+    [JSInvokable]
+    public void OpenPanelFromMap(int transportId)
     {
-        session.EndTime = DateTime.Now.ToString("HH:mm:ss");
-        session.TotalCost = 45.00; // Імітуємо розрахунок вартості
-        
-        if (session.User != null)
-        {
-            session.User.Balance -= session.TotalCost.Value; // Знімаємо кошти
-        }
+        var clickedTransport = transports?.FirstOrDefault(t => t.Id == transportId);
+        bool isInUse = sessions.Any(s => s.TransportId == transportId && string.IsNullOrEmpty(s.EndTime));
+        bool isMaintenance = clickedTransport?.StateCode?.ToLower().Contains("рем") == true;
 
-        Db.RentalSessions.Update(session);
-        await Db.SaveChangesAsync();
-        await LoadData();
+        if (clickedTransport != null && !isInUse && !isMaintenance)
+        {
+            OpenRentForm(clickedTransport);
+            StateHasChanged();
+        }
     }
 
-    // --- Логіка додавання інвентарю ---
     private async Task AddTestScooter()
     {
-        var newScooter = new Scooter { StateCode = "AA" + new Random().Next(1000, 9999) + "XX", BatteryLevel = 100, MotorPower = 350 };
+        var rnd = new Random();
+        var newScooter = new Scooter { 
+            StateCode = "AA" + rnd.Next(1000, 9999) + "XX", 
+            BatteryLevel = 100, MotorPower = 350,
+            Latitude = 50.6199 + (rnd.NextDouble() * 0.04 - 0.02), Longitude = 26.2516 + (rnd.NextDouble() * 0.04 - 0.02)
+        };
         Db.Scooters.Add(newScooter);
         await Db.SaveChangesAsync();
         await LoadData();
@@ -247,9 +441,69 @@ else
 
     private async Task AddTestBicycle()
     {
-        var newBicycle = new Bicycle { StateCode = "BIKE-" + new Random().Next(100, 999), FrameSize = "L", HasBasket = true };
+        var rnd = new Random();
+        var newBicycle = new Bicycle { 
+            StateCode = "BIKE-" + rnd.Next(100, 999), 
+            FrameSize = "L", HasBasket = true,
+            Latitude = 50.6199 + (rnd.NextDouble() * 0.04 - 0.02), Longitude = 26.2516 + (rnd.NextDouble() * 0.04 - 0.02)
+        };
         Db.Bicycles.Add(newBicycle);
         await Db.SaveChangesAsync();
         await LoadData();
+    }
+
+    private void OpenRentForm(Transport t)
+    {
+        transportToRent = t;
+        selectedUserId = 0;
+        selectedTariff = "";
+    }
+
+    private void CancelRent() => transportToRent = null;
+
+    private async Task ConfirmRent()
+    {
+        if (transportToRent != null && CanRent)
+        {
+            var session = new RentalSession { UserId = selectedUserId, TransportId = transportToRent.Id, StartTime = DateTime.Now.ToString("HH:mm:ss") };
+            Db.RentalSessions.Add(session);
+            await Db.SaveChangesAsync();
+            transportToRent = null; 
+            await LoadData(); 
+        }
+    }
+
+    private async Task EndRental(RentalSession session)
+    {
+        session.EndTime = DateTime.Now.ToString("HH:mm:ss");
+        
+        if (DateTime.TryParse(session.StartTime, out DateTime start) && 
+            DateTime.TryParse(session.EndTime, out DateTime end))
+        {
+            if (end < start) end = end.AddDays(1);
+            double totalMinutes = Math.Ceiling((end - start).TotalMinutes);
+            if (totalMinutes < 1) totalMinutes = 1;
+            
+            double tariffPerMinute = 3.0; 
+            session.TotalCost = totalMinutes * tariffPerMinute; 
+        }
+        else
+        {
+            session.TotalCost = 50.00; 
+        }
+        
+        if (session.User != null)
+        {
+            session.User.Balance -= session.TotalCost.Value; 
+        }
+
+        Db.RentalSessions.Update(session);
+        await Db.SaveChangesAsync();
+        await LoadData();
+    }
+
+    public void Dispose()
+    {
+        objRef?.Dispose();
     }
 }

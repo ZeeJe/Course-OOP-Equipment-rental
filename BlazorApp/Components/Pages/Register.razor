@@ -5,51 +5,113 @@
 @using Microsoft.EntityFrameworkCore
 @inject ApplicationDbContext Db
 
-<PageTitle>Реєстрація клієнта</PageTitle>
+<PageTitle>Реєстрація</PageTitle>
 
-<h1>Реєстрація нового користувача</h1>
-<hr />
+<style>
+    .sortable-header {
+        cursor: pointer;
+        user-select: none;
+        transition: background-color 0.2s;
+    }
+    .sortable-header:hover {
+        background-color: #f8f9fa;
+    }
+</style>
 
-<div class="card p-4 shadow-sm" style="max-width: 450px;">
-    <div class="mb-3">
-        <label class="form-label">Ваше ім'я або Нікнейм:</label>
-        <input @bind="newUser.Name" class="form-control" placeholder="Введіть ім'я..." />
-    </div>
-    
-    <div class="mb-3">
-        <label class="form-label">Початковий баланс (грн):</label>
-        <input type="number" @bind="newUser.Balance" class="form-control" />
-        <small class="text-muted">Даруємо 100 грн новим клієнтам!</small>
-    </div>
-    
-    <button class="btn btn-success w-100" @onclick="RegisterUser">Зареєструватися</button>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="fw-bold mb-0">Реєстрація нового користувача</h2>
 </div>
 
-@if (successMessage != null)
-{
-    <div class="alert alert-success mt-4" style="max-width: 450px;">
-        <strong>✅ Успіх!</strong> @successMessage
-    </div>
-}
+<div class="row g-4 mb-5">
+    <div class="col-md-5">
+        <div class="card shadow-sm border-0 rounded-4 bg-light p-4 h-100">
+            <h5 class="fw-bold text-primary mb-4">Створити акаунт</h5>
+            
+            <div class="mb-3">
+                <label class="form-label text-muted small fw-bold">Ваше ім'я або Нікнейм:</label>
+                <input type="text" class="form-control form-control-lg rounded-3" placeholder="Введіть ім'я..." @bind="newName" />
+            </div>
+            
+            <div class="mb-4">
+                <label class="form-label text-muted small fw-bold">Початковий баланс (грн):</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-white border-end-0">₴</span>
+                    <input type="number" class="form-control form-control-lg border-start-0 ps-0" @bind="newBalance" />
+                </div>
+                <div class="form-text text-success mt-2 fw-bold">Даруємо 100 грн новим клієнтам!</div>
+            </div>
 
-@if (users != null && users.Count > 0)
-{
-    <h4 class="mt-5">Список клієнтів у базі:</h4>
-    <ul class="list-group" style="max-width: 450px;">
-        @foreach(var u in users)
-        {
-            <li class="list-group-item d-flex justify-content-between align-items-center">
-                @u.Name
-                <span class="badge bg-primary rounded-pill">@u.Balance грн</span>
-            </li>
-        }
-    </ul>
-}
+            <button class="btn btn-success btn-lg w-100 rounded-pill shadow-sm fw-bold mt-auto" @onclick="RegisterUser" disabled="@string.IsNullOrWhiteSpace(newName)">
+                Зареєструватися
+            </button>
+            
+            @if (showSuccess)
+            {
+                <div class="alert alert-success mt-3 mb-0 rounded-3 py-2 text-center">
+                    Клієнта <strong>@lastAddedName</strong> успішно додано!
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="col-md-7">
+        <div class="card shadow-sm border-0 rounded-4 overflow-hidden h-100">
+            <div class="card-header bg-white p-4 border-bottom-0">
+                <h5 class="fw-bold mb-0 text-dark">Список клієнтів у базі</h5>
+            </div>
+            <div class="card-body p-0" style="max-height: 400px; overflow-y: auto;">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light sticky-top">
+                        <tr>
+                            <th class="sortable-header px-4" @onclick="@(() => Sort("ID"))">
+                                ID <span class="bi @GetSortIcon("ID") ms-1 text-muted" style="font-size: 0.8rem;"></span>
+                            </th>
+                            <th class="sortable-header" @onclick="@(() => Sort("Name"))">
+                                Ім'я <span class="bi @GetSortIcon("Name") ms-1 text-muted" style="font-size: 0.8rem;"></span>
+                            </th>
+                            <th class="sortable-header text-end px-4" @onclick="@(() => Sort("Balance"))">
+                                Баланс <span class="bi @GetSortIcon("Balance") ms-1 text-muted" style="font-size: 0.8rem;"></span>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (!GetSortedUsers().Any())
+                        {
+                            <tr><td colspan="3" class="text-center text-muted py-4">Немає зареєстрованих клієнтів.</td></tr>
+                        }
+                        else
+                        {
+                            @foreach (var u in GetSortedUsers())
+                            {
+                                <tr>
+                                    <td class="px-4 text-muted">#@u.Id</td>
+                                    <td><strong>@u.Name</strong></td>
+                                    <td class="text-end px-4">
+                                        <span class="badge @(u.Balance < 0 ? "bg-danger" : "bg-primary") rounded-pill px-3 py-2">
+                                            @u.Balance грн
+                                        </span>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
 
 @code {
-    private User newUser = new User { Balance = 100.0 };
-    private List<User>? users;
-    private string? successMessage;
+    private List<User> users = new();
+    private string newName = "";
+    private double newBalance = 100;
+    
+    private bool showSuccess = false;
+    private string lastAddedName = "";
+
+    // Змінні сортування
+    private string sortCol = "ID";
+    private bool sortAsc = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -61,16 +123,43 @@
         users = await Db.Users.ToListAsync();
     }
 
+    // Логіка сортування
+    private void Sort(string col)
+    {
+        if (sortCol == col) sortAsc = !sortAsc;
+        else { sortCol = col; sortAsc = true; }
+    }
+
+    private string GetSortIcon(string colName)
+    {
+        if (sortCol != colName) return "bi-arrow-down-up";
+        return sortAsc ? "bi-arrow-up" : "bi-arrow-down";
+    }
+
+    private IEnumerable<User> GetSortedUsers()
+    {
+        return sortCol switch {
+            "Name" => sortAsc ? users.OrderBy(u => u.Name) : users.OrderByDescending(u => u.Name),
+            "Balance" => sortAsc ? users.OrderBy(u => u.Balance) : users.OrderByDescending(u => u.Balance),
+            _ => sortAsc ? users.OrderBy(u => u.Id) : users.OrderByDescending(u => u.Id)
+        };
+    }
+
     private async Task RegisterUser()
     {
-        if (!string.IsNullOrWhiteSpace(newUser.Name))
+        if (!string.IsNullOrWhiteSpace(newName))
         {
-            Db.Users.Add(newUser);
+            var user = new User { Name = newName, Balance = newBalance };
+            Db.Users.Add(user);
             await Db.SaveChangesAsync();
             
-            successMessage = $"Користувача {newUser.Name} успішно додано до бази!";
-            newUser = new User { Balance = 100.0 }; // Очищаємо форму для наступного
-            await LoadUsers(); // Оновлюємо список знизу
+            lastAddedName = newName;
+            showSuccess = true;
+            newName = "";
+            newBalance = 100;
+            
+            await LoadUsers();
+            _ = Task.Delay(3000).ContinueWith(_ => { showSuccess = false; InvokeAsync(StateHasChanged); });
         }
     }
 }
