@@ -7,12 +7,12 @@
 
 <PageTitle>Керування прокатом</PageTitle>
 
-<h1>🚲 Інвентар та Прокат</h1>
+<h1>Інвентар та Прокат</h1>
 <hr />
 
 <div class="mb-4">
-    <button class="btn btn-success me-2" @onclick="AddTestScooter">➕ Додати самокат</button>
-    <button class="btn btn-info" @onclick="AddTestBicycle">➕ Додати велосипед</button>
+    <button class="btn btn-success me-2" @onclick="AddTestScooter">Додати самокат</button>
+    <button class="btn btn-info" @onclick="AddTestBicycle">Додати велосипед</button>
 </div>
 
 @if (transportToRent != null)
@@ -43,8 +43,8 @@
                     </select>
                 </div>
                 <div class="col-md-4 d-flex align-items-end">
-                    <button class="btn btn-success w-100 me-2" disabled="@(!CanRent)" @onclick="ConfirmRent">✅ Підтвердити</button>
-                    <button class="btn btn-secondary w-100" @onclick="CancelRent">❌ Скасувати</button>
+                    <button class="btn btn-success w-100 me-2" disabled="@(!CanRent)" @onclick="ConfirmRent">Підтвердити</button>
+                    <button class="btn btn-secondary w-100" @onclick="CancelRent">Скасувати</button>
                 </div>
             </div>
         </div>
@@ -65,6 +65,7 @@ else
                 <th>Тип</th>
                 <th>Держ. номер</th>
                 <th>Характеристики</th>
+                <th>Статус</th>
                 <th>Дія</th>
             </tr>
         </thead>
@@ -74,8 +75,8 @@ else
                 <tr>
                     <td>@t.Id</td>
                     <td>
-                        @if (t is Scooter) { <span>🛴 Самокат</span> }
-                        else if (t is Bicycle) { <span>🚲 Велосипед</span> }
+                        @if (t is Scooter) { <span>Самокат</span> }
+                        else if (t is Bicycle) { <span>Велосипед</span> }
                     </td>
                     <td><strong>@t.StateCode</strong></td>
                     <td>
@@ -91,7 +92,34 @@ else
                         }
                     </td>
                     <td>
-                        <button class="btn btn-sm btn-primary" @onclick="() => OpenRentForm(t)">🔑 Орендувати</button>
+                        @{
+                            // Логіка статусів: перевіряємо чи в оренді, чи на ремонті
+                            bool isInUse = sessions != null && sessions.Any(s => s.TransportId == t.Id && string.IsNullOrEmpty(s.EndTime));
+                            bool isMaintenance = t.StateCode != null && (t.StateCode.ToLower().Contains("рем") || t.StateCode.ToLower().Contains("maint"));
+                        }
+                        @if (isInUse)
+                        {
+                            <span class="badge bg-danger">В оренді</span>
+                        }
+                        else if (isMaintenance)
+                        {
+                            <span class="badge bg-warning text-dark">На обслуговуванні</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-success">Доступно</span>
+                        }
+                    </td>
+                    <td>
+                        @{
+                            // Якщо транспорт зайнятий або зламаний, кнопка "Орендувати" блокується
+                            bool isDisabled = isInUse || isMaintenance;
+                        }
+                        <button class="btn btn-sm @(isDisabled ? "btn-secondary" : "btn-primary")" 
+                                disabled="@isDisabled" 
+                                @onclick="() => OpenRentForm(t)">
+                            @(isInUse ? "Зайнято" : (isMaintenance ? "Ремонт" : "Орендувати"))
+                        </button>
                     </td>
                 </tr>
             }
@@ -100,7 +128,7 @@ else
 }
 
 <hr />
-<h4 class="mb-3">⏱ Активні та завершені поїздки:</h4>
+<h4 class="mb-3">Активні та завершені поїздки:</h4>
 @if (sessions != null && sessions.Any())
 {
     <table class="table table-bordered">
@@ -156,10 +184,9 @@ else
 
     private async Task LoadData()
     {
-        // EF Core автоматично дістає і самокати, і велосипеди з базової таблиці!
         transports = await Db.Transports.ToListAsync();
         users = await Db.Users.ToListAsync();
-        sessions = await Db.RentalSessions.Include(rs => rs.User).Include(rs => rs.Transport).ToListAsync();
+        sessions = await Db.RentalSessions.Include(rs => rs.User).Include(rs => rs.Transport).OrderByDescending(s => s.Id).ToListAsync();
     }
 
     // --- Логіка оренди ---

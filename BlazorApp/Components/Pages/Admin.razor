@@ -1,0 +1,413 @@
+@page "/admin"
+@rendermode InteractiveServer
+@using BlazorApp.Data
+@using BlazorApp.Models
+@using Microsoft.EntityFrameworkCore
+@inject ApplicationDbContext Db
+
+<PageTitle>Керування базою</PageTitle>
+
+<h2>Панель керування базою даних (CRUD)</h2>
+<hr />
+
+<ul class="nav nav-tabs mb-4">
+    <li class="nav-item">
+        <button class="nav-link @(activeTab == "users" ? "active fw-bold" : "")" @onclick="@(() => activeTab = "users")">Користувачі</button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link @(activeTab == "transport" ? "active fw-bold" : "")" @onclick="@(() => activeTab = "transport")">Автопарк</button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link @(activeTab == "sessions" ? "active fw-bold" : "")" @onclick="@(() => activeTab = "sessions")">Усі поїздки</button>
+    </li>
+</ul>
+
+@if (activeTab == "users")
+{
+    @if (editingUser != null)
+    {
+        <div class="card p-3 mb-4 border-success">
+            <h5>Редагування користувача #@editingUser.Id</h5>
+            <div class="row g-2">
+                <div class="col-md-5">
+                    <label class="form-label">Ім'я:</label>
+                    <input class="form-control" @bind="editingUser.Name" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Баланс (грн):</label>
+                    <input type="number" step="0.01" class="form-control" @bind="editingUser.Balance" />
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <button class="btn btn-success w-100 me-2" @onclick="SaveUser">Зберегти</button>
+                    <button class="btn btn-secondary w-100" @onclick="() => editingUser = null">Скасувати</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0">Клієнтська база</h4>
+        <div class="d-flex gap-3" style="max-width: 500px; width: 100%;">
+            <input type="text" class="form-control" placeholder="Пошук за ім'ям..." @bind="userSearchQuery" @bind:event="oninput" />
+            <select class="form-select" @bind="userFilter" style="max-width: 200px;">
+                <option value="all">Усі клієнти</option>
+                <option value="positive">З грошима (&gt; 0)</option>
+                <option value="negative">Боржники (&lt; 0)</option>
+            </select>
+        </div>
+    </div>
+
+    <table class="table table-hover align-middle shadow-sm">
+        <thead class="table-dark">
+            <tr>
+                <th>ID</th>
+                <th>Ім'я</th>
+                <th>Баланс</th>
+                <th class="text-end">Дії</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (!FilteredUsers.Any())
+            {
+                <tr>
+                    <td colspan="4" class="text-center text-muted py-3">За вашим запитом нікого не знайдено.</td>
+                </tr>
+            }
+            else
+            {
+                @foreach (var u in FilteredUsers)
+                {
+                    <tr>
+                        <td>@u.Id</td>
+                        <td><strong>@u.Name</strong></td>
+                        <td class="@(u.Balance < 0 ? "text-danger fw-bold" : "")">@u.Balance грн</td>
+                        <td class="text-end">
+                            <button class="btn btn-sm btn-outline-primary me-2" @onclick="() => editingUser = u">Редагувати</button>
+                            <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteUser(u)">Видалити</button>
+                        </td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+}
+
+@if (activeTab == "transport")
+{
+    @if (editingTransport != null)
+    {
+        <div class="card p-3 mb-4 border-primary">
+            <h5>Редагування транспорту #@editingTransport.Id</h5>
+            <div class="row g-2">
+                <div class="col-md-4">
+                    <label class="form-label">Держ. номер (або "Ремонт"):</label>
+                    <input class="form-control" @bind="editingTransport.StateCode" />
+                </div>
+
+                @if (editingTransport is Scooter s)
+                {
+                    <div class="col-md-2">
+                        <label class="form-label">Батарея (%):</label>
+                        <input type="number" class="form-control" @bind="s.BatteryLevel" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Двигун (Вт):</label>
+                        <input type="number" class="form-control" @bind="s.MotorPower" />
+                    </div>
+                }
+                else if (editingTransport is Bicycle b)
+                {
+                    <div class="col-md-3">
+                        <label class="form-label">Рама:</label>
+                        <input class="form-control" @bind="b.FrameSize" />
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end pb-2">
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" @bind="b.HasBasket" id="basketCheck" />
+                            <label class="form-check-label" for="basketCheck">Є кошик</label>
+                        </div>
+                    </div>
+                }
+
+                <div class="col-md-3 d-flex align-items-end">
+                    <button class="btn btn-primary w-100 me-2" @onclick="SaveTransport">Зберегти</button>
+                    <button class="btn btn-secondary w-100" @onclick="() => editingTransport = null">Скасувати</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0">Керування інвентарем</h4>
+        <div class="d-flex gap-3" style="max-width: 500px; width: 100%;">
+            <input type="text" class="form-control" placeholder="Пошук за держ. номером..." @bind="transportSearchQuery" @bind:event="oninput" />
+            <select class="form-select" @bind="transportFilter" style="max-width: 210px;">
+                <option value="all">Увесь транспорт</option>
+                <option value="available">Доступні</option>
+                <option value="in_use">В оренді</option>
+                <option value="maintenance">На обслуговуванні</option>
+            </select>
+        </div>
+    </div>
+
+    <table class="table table-hover align-middle shadow-sm">
+        <thead class="table-dark">
+            <tr>
+                <th>ID</th>
+                <th>Тип</th>
+                <th>Держ. номер</th>
+                <th>Характеристики</th>
+                <th>Статус</th>
+                <th class="text-end">Дії</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (!FilteredTransports.Any())
+            {
+                <tr>
+                    <td colspan="6" class="text-center text-muted py-3">Транспорт не знайдено.</td>
+                </tr>
+            }
+            else
+            {
+                @foreach (var t in FilteredTransports)
+                {
+                    <tr>
+                        <td>@t.Id</td>
+                        <td>@(t is Scooter ? "Самокат" : "Велосипед")</td>
+                        <td><strong>@t.StateCode</strong></td>
+                        <td>
+                            @if (t is Scooter s) { <small>Бат: @s.BatteryLevel%, @s.MotorPower Вт</small> }
+                            else if (t is Bicycle b) { <small>Рама: @b.FrameSize, Кошик: @(b.HasBasket ? "Так" : "Ні")</small> }
+                        </td>
+                        <td>
+                            @{
+                                bool isInUse = sessions.Any(rs => rs.TransportId == t.Id && string.IsNullOrEmpty(rs.EndTime));
+                                bool isMaintenance = t.StateCode != null && (t.StateCode.ToLower().Contains("рем") || t.StateCode.ToLower().Contains("maint"));
+                            }
+                            @if (isInUse)
+                            {
+                                <span class="badge bg-danger">В оренді</span>
+                            }
+                            else if (isMaintenance)
+                            {
+                                <span class="badge bg-warning text-dark">На обслуговуванні</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-success">Доступно</span>
+                            }
+                        </td>
+                        <td class="text-end">
+                            <button class="btn btn-sm btn-outline-primary me-2" @onclick="() => editingTransport = t">Ред.</button>
+                            <button class="btn btn-sm btn-outline-danger" disabled="@isInUse" @onclick="() => DeleteTransport(t)">Списати</button>
+                        </td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+}
+
+@if (activeTab == "sessions")
+{
+    @if (editingSession != null)
+    {
+        <div class="card p-3 mb-4 border-info">
+            <h5>Редагування поїздки #@editingSession.Id</h5>
+            <div class="row g-2">
+                <div class="col-md-3">
+                    <label class="form-label">Час початку:</label>
+                    <input class="form-control" @bind="editingSession.StartTime" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Час фінішу:</label>
+                    <input class="form-control" @bind="editingSession.EndTime" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Вартість (грн):</label>
+                    <input type="number" step="0.01" class="form-control" @bind="editingSession.TotalCost" />
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <button class="btn btn-info w-100 me-2 text-white" @onclick="SaveSession">Зберегти</button>
+                    <button class="btn btn-secondary w-100" @onclick="() => editingSession = null">Скасувати</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0">Історія поїздок</h4>
+        <div class="d-flex gap-3" style="max-width: 500px; width: 100%;">
+            <input type="text" class="form-control" placeholder="Пошук (клієнт або транспорт)..." @bind="sessionSearchQuery" @bind:event="oninput" />
+            <select class="form-select" @bind="sessionFilter" style="max-width: 210px;">
+                <option value="all">Усі поїздки</option>
+                <option value="active">В дорозі</option>
+                <option value="completed">Завершено</option>
+            </select>
+        </div>
+    </div>
+
+    <table class="table table-hover align-middle shadow-sm">
+        <thead class="table-dark">
+            <tr>
+                <th>ID</th>
+                <th>Клієнт / Транспорт</th>
+                <th>Період</th>
+                <th>Дохід</th>
+                <th class="text-end">Дії</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (!FilteredSessions.Any())
+            {
+                <tr>
+                    <td colspan="5" class="text-center text-muted py-3">Поїздок не знайдено.</td>
+                </tr>
+            }
+            else
+            {
+                @foreach (var s in FilteredSessions)
+                {
+                    <tr>
+                        <td>@s.Id</td>
+                        <td>
+                            <strong>@(s.User?.Name ?? "Видалений клієнт")</strong> <br>
+                            <small class="text-muted">@(s.Transport?.StateCode ?? "Списаний транспорт")</small>
+                        </td>
+                        <td>@s.StartTime — @(string.IsNullOrEmpty(s.EndTime) ? "В дорозі" : s.EndTime)</td>
+                        <td><strong class="text-success">@(s.TotalCost?.ToString() ?? "0") грн</strong></td>
+                        <td class="text-end">
+                            <button class="btn btn-sm btn-outline-primary me-2" @onclick="() => editingSession = s">Редагувати</button>
+                            <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteSession(s)">Видалити</button>
+                        </td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private string activeTab = "users"; 
+    
+    private List<User> users = new();
+    private List<Transport> transports = new();
+    private List<RentalSession> sessions = new();
+
+    // === Пошук та фільтрація для Користувачів ===
+    private string userSearchQuery = "";
+    private string userFilter = "all";
+
+    private IEnumerable<User> FilteredUsers => users.Where(u => 
+        (string.IsNullOrWhiteSpace(userSearchQuery) || (u.Name != null && u.Name.ToLower().Contains(userSearchQuery.ToLower()))) &&
+        (userFilter == "all" ||
+         (userFilter == "positive" && u.Balance > 0) ||
+         (userFilter == "negative" && u.Balance < 0))
+    );
+
+    // === Пошук та фільтрація для Транспорту ===
+    private string transportSearchQuery = "";
+    private string transportFilter = "all";
+
+    private IEnumerable<Transport> FilteredTransports => transports.Where(t => 
+        (string.IsNullOrWhiteSpace(transportSearchQuery) || (t.StateCode != null && t.StateCode.ToLower().Contains(transportSearchQuery.ToLower()))) &&
+        (transportFilter == "all" ||
+         (transportFilter == "in_use" && sessions.Any(s => s.TransportId == t.Id && string.IsNullOrEmpty(s.EndTime))) ||
+         (transportFilter == "maintenance" && t.StateCode != null && (t.StateCode.ToLower().Contains("рем") || t.StateCode.ToLower().Contains("maint"))) ||
+         (transportFilter == "available" && !sessions.Any(s => s.TransportId == t.Id && string.IsNullOrEmpty(s.EndTime)) && !(t.StateCode != null && (t.StateCode.ToLower().Contains("рем") || t.StateCode.ToLower().Contains("maint")))))
+    );
+
+    // === Пошук та фільтрація для Сеансів ===
+    private string sessionSearchQuery = "";
+    private string sessionFilter = "all";
+
+    private IEnumerable<RentalSession> FilteredSessions => sessions.Where(s => 
+        (string.IsNullOrWhiteSpace(sessionSearchQuery) || 
+         (s.User?.Name != null && s.User.Name.ToLower().Contains(sessionSearchQuery.ToLower())) ||
+         (s.Transport?.StateCode != null && s.Transport.StateCode.ToLower().Contains(sessionSearchQuery.ToLower()))) 
+        &&
+        (sessionFilter == "all" ||
+         (sessionFilter == "active" && string.IsNullOrEmpty(s.EndTime)) ||
+         (sessionFilter == "completed" && !string.IsNullOrEmpty(s.EndTime)))
+    );
+
+    // Змінні для збереження об'єкта, який зараз редагується
+    private User? editingUser;
+    private Transport? editingTransport;
+    private RentalSession? editingSession;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        users = await Db.Users.ToListAsync();
+        transports = await Db.Transports.ToListAsync();
+        sessions = await Db.RentalSessions.Include(s => s.User).Include(s => s.Transport).OrderByDescending(s => s.Id).ToListAsync();
+    }
+
+    // --- ЗБЕРЕЖЕННЯ ЗМІН (UPDATE) ---
+
+    private async Task SaveUser()
+    {
+        if (editingUser != null)
+        {
+            Db.Users.Update(editingUser);
+            await Db.SaveChangesAsync();
+            editingUser = null;
+            await LoadData();
+        }
+    }
+
+    private async Task SaveTransport()
+    {
+        if (editingTransport != null)
+        {
+            Db.Transports.Update(editingTransport);
+            await Db.SaveChangesAsync();
+            editingTransport = null;
+            await LoadData();
+        }
+    }
+
+    private async Task SaveSession()
+    {
+        if (editingSession != null)
+        {
+            Db.RentalSessions.Update(editingSession);
+            await Db.SaveChangesAsync();
+            editingSession = null;
+            await LoadData();
+        }
+    }
+
+    // --- ВИДАЛЕННЯ (DELETE) ---
+
+    private async Task DeleteUser(User user)
+    {
+        var userSessions = Db.RentalSessions.Where(s => s.UserId == user.Id);
+        Db.RentalSessions.RemoveRange(userSessions);
+        Db.Users.Remove(user);
+        await Db.SaveChangesAsync();
+        await LoadData();
+    }
+
+    private async Task DeleteTransport(Transport transport)
+    {
+        var transportSessions = Db.RentalSessions.Where(s => s.TransportId == transport.Id);
+        Db.RentalSessions.RemoveRange(transportSessions);
+        Db.Transports.Remove(transport);
+        await Db.SaveChangesAsync();
+        await LoadData();
+    }
+
+    private async Task DeleteSession(RentalSession session)
+    {
+        Db.RentalSessions.Remove(session);
+        await Db.SaveChangesAsync();
+        await LoadData();
+    }
+}
