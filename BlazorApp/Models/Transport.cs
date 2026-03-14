@@ -7,7 +7,7 @@ namespace BlazorApp.Models
         public string StateCode { get; set; } = string.Empty;
 
         // Координати для відображення на інтерактивній карті 
-        // (За замовчуванням стоять координати Рівненської області / Клевані)
+        // (За замовчуванням стоять координати Рівненської області)
         // Змінили на координати центру Рівного
         public double Latitude { get; set; } = 50.6199;
         public double Longitude { get; set; } = 26.2516;

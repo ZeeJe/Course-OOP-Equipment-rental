@@ -1,6 +1,7 @@
 using BlazorApp.Components;
 using Microsoft.EntityFrameworkCore;
 using BlazorApp.Data;
+using BlazorApp.Services; // Підключаємо папку з нашими сервісами
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -8,11 +9,18 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-// --- НАЛАШТУВАННЯ БАЗИ ДАНИХ ---
+// ========================================================
+// 1. НАЛАШТУВАННЯ БАЗИ ДАНИХ (SQLite)
+// ========================================================
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlite(connectionString));
-// -------------------------------
+
+// ========================================================
+// 2. РЕЄСТРАЦІЯ СЕРВІСІВ З UML-ДІАГРАМИ (БІЗНЕС-ЛОГІКА)
+// ========================================================
+builder.Services.AddScoped<ITransportRepository, TransportRepository>();
+builder.Services.AddScoped<RentalService>();
 
 var app = builder.Build();
 
