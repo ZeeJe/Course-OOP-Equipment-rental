@@ -186,8 +186,6 @@ C:\Ze_Je\User\Documents\Cod\Course-OOP-Equipment-rental\BlazorApp\obj\Debug\net1
 C:\Ze_Je\User\Documents\Cod\Course-OOP-Equipment-rental\BlazorApp\obj\Debug\net10.0\compressed\l2mhd45r4z-{0}-63fj8s7r0e-63fj8s7r0e.gz
 C:\Ze_Je\User\Documents\Cod\Course-OOP-Equipment-rental\BlazorApp\obj\Debug\net10.0\compressed\i0oilot2q1-{0}-0j3bgjxly4-0j3bgjxly4.gz
 C:\Ze_Je\User\Documents\Cod\Course-OOP-Equipment-rental\BlazorApp\obj\Debug\net10.0\compressed\hsa0fwp5ls-{0}-cyz5k529gx-cyz5k529gx.gz
-C:\Ze_Je\User\Documents\Cod\Course-OOP-Equipment-rental\BlazorApp\obj\Debug\net10.0\compressed\0txged01c1-{0}-ax6tuj8tun-ax6tuj8tun.gz
-C:\Ze_Je\User\Documents\Cod\Course-OOP-Equipment-rental\BlazorApp\obj\Debug\net10.0\compressed\e2p7e3doxt-{0}-zr4b1gdhaw-zr4b1gdhaw.gz
 C:\Ze_Je\User\Documents\Cod\Course-OOP-Equipment-rental\BlazorApp\obj\Debug\net10.0\compressed\8v4adbxxmx-{0}-2mc2qwa0tf-2mc2qwa0tf.gz
 C:\Ze_Je\User\Documents\Cod\Course-OOP-Equipment-rental\BlazorApp\obj\Debug\net10.0\compressed\rrzzv9ip5o-{0}-2mc2qwa0tf-2mc2qwa0tf.gz
 C:\Ze_Je\User\Documents\Cod\Course-OOP-Equipment-rental\BlazorApp\obj\Debug\net10.0\staticwebassets.build.json
@@ -201,3 +199,5 @@ C:\Ze_Je\User\Documents\Cod\Course-OOP-Equipment-rental\BlazorApp\obj\Debug\net1
 C:\Ze_Je\User\Documents\Cod\Course-OOP-Equipment-rental\BlazorApp\obj\Debug\net10.0\BlazorApp.pdb
 C:\Ze_Je\User\Documents\Cod\Course-OOP-Equipment-rental\BlazorApp\obj\Debug\net10.0\BlazorApp.genruntimeconfig.cache
 C:\Ze_Je\User\Documents\Cod\Course-OOP-Equipment-rental\BlazorApp\obj\Debug\net10.0\ref\BlazorApp.dll
+C:\Ze_Je\User\Documents\Cod\Course-OOP-Equipment-rental\BlazorApp\obj\Debug\net10.0\compressed\0txged01c1-{0}-b9228eflpl-b9228eflpl.gz
+C:\Ze_Je\User\Documents\Cod\Course-OOP-Equipment-rental\BlazorApp\obj\Debug\net10.0\compressed\e2p7e3doxt-{0}-2tj1sjhksk-2tj1sjhksk.gz
