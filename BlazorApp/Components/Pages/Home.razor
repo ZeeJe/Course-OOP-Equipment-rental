@@ -28,6 +28,7 @@
                         <i class="bi bi-wallet2 fs-3 opacity-50"></i>
                     </div>
                     <div>
+                        @* ТУТ ВИПРАВЛЕНО ДОДАТКОВИЙ ЗАХИСТ ВІД NULL *@
                         <h2 class="fw-bold mb-0">@totalRevenue.ToString("N0") ₴</h2>
                         <small class="opacity-75">З усіх завершених поїздок</small>
                     </div>
@@ -176,7 +177,15 @@
             var sessions = await Db.RentalSessions.ToListAsync();
             activeRentals = sessions.Count(s => string.IsNullOrEmpty(s.EndTime));
             
-            totalRevenue = sessions.Where(s => s.TotalCost.HasValue).Sum(s => s.TotalCost.Value);
+            // ТУТ БЕЗПЕЧНИЙ РОЗРАХУНОК СУМИ (БЕЗ ЖОВТОЇ ПОМИЛКИ)
+            totalRevenue = 0;
+            foreach (var s in sessions)
+            {
+                if (s.TotalCost.HasValue)
+                {
+                    totalRevenue += (double)s.TotalCost.Value;
+                }
+            }
             
             brokenTransports = allTransports.Count(t => t.StateCode != null && (t.StateCode.ToLower().Contains("рем") || t.StateCode.ToLower().Contains("maint")));
             availableTransports = totalTransports - activeRentals - brokenTransports;

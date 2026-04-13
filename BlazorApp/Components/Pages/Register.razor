@@ -41,6 +41,14 @@
                 <div class="form-text text-success mt-2 fw-bold">Даруємо 100 грн новим клієнтам!</div>
             </div>
 
+            @* Блок для виводу червоної помилки *@
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-danger mb-3 rounded-3 py-2 text-center fw-bold">
+                    @errorMessage
+                </div>
+            }
+
             <button class="btn btn-success btn-lg w-100 rounded-pill shadow-sm fw-bold mt-auto" @onclick="RegisterUser" disabled="@string.IsNullOrWhiteSpace(newName)">
                 Зареєструватися
             </button>
@@ -107,6 +115,7 @@
     private double newBalance = 100;
     
     private bool showSuccess = false;
+    private string errorMessage = ""; // Змінна для помилки
     private string lastAddedName = "";
 
     // Змінні сортування
@@ -147,8 +156,19 @@
 
     private async Task RegisterUser()
     {
+        errorMessage = ""; // Очищаємо помилку перед новою перевіркою
+        showSuccess = false;
+
         if (!string.IsNullOrWhiteSpace(newName))
         {
+            // ПЕРЕВІРКА НА УНІКАЛЬНІСТЬ
+            bool userExists = await Db.Users.AnyAsync(u => u.Name.ToLower() == newName.ToLower());
+            if (userExists)
+            {
+                errorMessage = "Користувач з таким іменем вже існує!";
+                return; // Зупиняємо реєстрацію
+            }
+
             var user = new User { Name = newName, Balance = newBalance };
             Db.Users.Add(user);
             await Db.SaveChangesAsync();

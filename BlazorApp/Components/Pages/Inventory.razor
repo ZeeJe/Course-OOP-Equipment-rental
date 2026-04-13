@@ -81,7 +81,14 @@
                 <label class="form-label fw-bold text-success">Маєте промокод?</label>
                 <input type="text" class="form-control form-control-lg border-success" placeholder="Введіть код..." @bind="enteredPromoCode" @bind:event="oninput" />
             </div>
-
+            
+            @if (!string.IsNullOrEmpty(rentErrorMessage))
+            {
+                <div class="alert alert-danger p-2 mb-3 shadow-sm rounded-3 fw-bold text-center" style="font-size: 0.9rem;">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i> @rentErrorMessage
+                </div>
+            }
+            
             @if (issueSubmittedSuccess)
             {
                 <div class="alert alert-success text-center rounded-3 p-2 mb-3">Дякуємо! Скарга відправлена.</div>
@@ -249,6 +256,7 @@
     private int selectedUserId = 0;
     private string selectedTariff = "";
     private string enteredPromoCode = "";
+    private string rentErrorMessage = ""; // <--- ДОДАЙ ОСЬ ЦЕЙ РЯДОК
     private bool CanRent => selectedUserId > 0 && !string.IsNullOrEmpty(selectedTariff);
 
     private bool showIssueForm = false;
@@ -393,6 +401,7 @@
         showIssueForm = false; 
         issueSubmittedSuccess = false; 
         issueDescription = ""; 
+        rentErrorMessage = ""; // <--- ДОДАЙ ОСЬ ЦЕЙ РЯДОК
     }
     
     private void CancelRent() => transportToRent = null;
@@ -400,21 +409,33 @@
     // ПІДТВЕРДЖЕННЯ ОРЕНДИ ТА ПРОМОКОДИ
     private async Task ConfirmRent()
     {
+        rentErrorMessage = ""; // Очищаємо помилку перед новою спробою
+
         if (transportToRent != null && CanRent) 
         { 
-            int discount = 0;
-            string code = enteredPromoCode.Trim().ToUpper();
-            
-            // База промокодів (Можеш придумати свої!)
-            if (code == "STUDENT20") { discount = 20; }
-            else if (code == "OOP100") { discount = 100; } // Повністю безкоштовно
-            else if (code == "ZELENSKY50") { discount = 50; }
+            try 
+            {
+                int discount = 0;
+                string code = enteredPromoCode.Trim().ToUpper();
+                
+                // База промокодів
+                if (code == "STUDENT20") { discount = 20; }
+                else if (code == "OOP100") { discount = 100; } 
+                else if (code == "ZELENSKY50") { discount = 50; }
 
-            await RentalSvc.ProcessRental(selectedUserId, transportToRent.Id, selectedTariff, discount);
-            
-            transportToRent = null; 
-            enteredPromoCode = ""; 
-            await LoadData(); 
+                // Якщо тут грошей не вистачає - бекенд викине помилку і код перестрибне в блок catch
+                await RentalSvc.ProcessRental(selectedUserId, transportToRent.Id, selectedTariff, discount);
+                
+                // Якщо все успішно:
+                transportToRent = null; 
+                enteredPromoCode = ""; 
+                await LoadData(); 
+            }
+            catch (Exception ex)
+            {
+                // ЛОВИМО ПОМИЛКУ: Замість зависання екрану, ми записуємо текст помилки в змінну
+                rentErrorMessage = ex.Message;
+            }
         }
     }
 
