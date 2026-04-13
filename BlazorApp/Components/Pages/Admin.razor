@@ -17,12 +17,146 @@
     <h2 class="fw-bold mb-0">Панель керування базою даних (CRUD)</h2>
 </div>
 
-<ul class="nav nav-pills mb-4 gap-2">
+<ul class="nav nav-pills mb-4 gap-2 flex-wrap">
     <li class="nav-item"><button class="nav-link @(activeTab == "users" ? "active shadow-sm" : "bg-light text-dark border")" @onclick="@(() => activeTab = "users")">Користувачі</button></li>
     <li class="nav-item"><button class="nav-link @(activeTab == "transport" ? "active shadow-sm" : "bg-light text-dark border")" @onclick="@(() => activeTab = "transport")">Автопарк</button></li>
     <li class="nav-item"><button class="nav-link @(activeTab == "sessions" ? "active shadow-sm" : "bg-light text-dark border")" @onclick="@(() => activeTab = "sessions")">Усі поїздки</button></li>
-    <li class="nav-item"><button class="nav-link @(activeTab == "issues" ? "active btn-danger shadow-sm" : "bg-light text-danger border")" @onclick="@(() => activeTab = "issues")">Скарги клієнтів @if(unresolvedIssues > 0){<span class="badge bg-danger ms-1">@unresolvedIssues</span>}</button></li>
+    @* НОВІ ВКЛАДКИ ДЛЯ ТАРИФІВ ТА ПРОМОКОДІВ *@
+    <li class="nav-item"><button class="nav-link @(activeTab == "tariffs" ? "active shadow-sm" : "bg-light text-dark border")" @onclick="@(() => activeTab = "tariffs")">Тарифи</button></li>
+    <li class="nav-item"><button class="nav-link @(activeTab == "promocodes" ? "active shadow-sm" : "bg-light text-dark border")" @onclick="@(() => activeTab = "promocodes")">Промокоди</button></li>
+    @* СКАРГИ *@
+    <li class="nav-item ms-auto"><button class="nav-link @(activeTab == "issues" ? "active btn-danger shadow-sm" : "bg-light text-danger border")" @onclick="@(() => activeTab = "issues")">Скарги @if(unresolvedIssues > 0){<span class="badge bg-danger ms-1">@unresolvedIssues</span>}</button></li>
 </ul>
+
+@* -------- НОВА ВКЛАДКА: ТАРИФИ -------- *@
+@if (activeTab == "tariffs")
+{
+    <div class="row mb-4">
+        <div class="col-md-5">
+            <div class="card p-4 border-0 shadow-sm rounded-4 bg-light">
+                <h5 class="fw-bold text-primary mb-3">Конструктор тарифу</h5>
+                
+                <div class="mb-3">
+                    <label class="form-label text-muted small fw-bold">Для якого транспорту?</label>
+                    <select class="form-select border-primary" @bind="newTariffTarget">
+                        <option value="Універсальний">Універсальний (для всіх)</option>
+                        <option value="Самокат">Тільки Самокат 🛴</option>
+                        <option value="Велосипед">Тільки Велосипед 🚲</option>
+                    </select>
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <label class="form-label text-muted small fw-bold">Тривалість:</label>
+                        <input type="number" min="1" class="form-control" @bind="newTariffDuration" />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label text-muted small fw-bold">Одиниці:</label>
+                        <select class="form-select" @bind="newTariffUnit">
+                            <option value="хв.">хвилин</option>
+                            <option value="год.">годин</option>
+                            <option value="дн.">днів</option>
+                            <option value="міс.">місяців</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label text-muted small fw-bold">Вартість (грн):</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-white">₴</span>
+                        <input type="number" min="0" class="form-control border-start-0 ps-0" @bind="newTariffPrice" />
+                    </div>
+                </div>
+
+                <button class="btn btn-success w-100 fw-bold shadow-sm" @onclick="CreateTariff" disabled="@(newTariffDuration <= 0)">
+                    <i class="bi bi-plus-circle me-2"></i>Додати тариф
+                </button>
+            </div>
+        </div>
+        
+        <div class="col-md-7">
+            <div class="card shadow-sm border-0 rounded-4 overflow-hidden h-100">
+                <div class="card-header bg-white p-3 border-bottom-0"><h5 class="fw-bold mb-0 text-dark">Список тарифів</h5></div>
+                <div class="card-body p-0">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-dark">
+                            <tr><th>Назва</th><th>Ціна</th><th class="text-end px-4">Дії</th></tr>
+                        </thead>
+                        <tbody>
+                            @if (!tariffs.Any()) { <tr><td colspan="3" class="text-center text-muted py-4">Тарифи ще не додані.</td></tr> }
+                            else { 
+                                @foreach (var tf in tariffs) { 
+                                    <tr>
+                                        <td class="px-3"><strong>@tf.Name</strong></td>
+                                        <td>@tf.Price грн</td>
+                                        <td class="text-end px-3"><button class="btn btn-sm btn-outline-danger rounded-pill" @onclick="() => DeleteTariff(tf)">Видалити</button></td>
+                                    </tr> 
+                                } 
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* -------- НОВА ВКЛАДКА: ПРОМОКОДИ -------- *@
+@if (activeTab == "promocodes")
+{
+    <div class="row mb-4">
+        <div class="col-md-5">
+            <div class="card p-4 border-0 shadow-sm rounded-4 bg-light">
+                <h5 class="fw-bold text-primary mb-3">Створити промокод</h5>
+                <div class="mb-3">
+                    <label class="form-label text-muted small">Код (напр. "STUDENT20"):</label>
+                    <input type="text" class="form-control text-uppercase" @bind="newPromoCode" placeholder="Лише великі літери та цифри" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label text-muted small">Знижка (%):</label>
+                    <input type="number" min="1" max="100" class="form-control" @bind="newPromoDiscount" />
+                </div>
+                <button class="btn btn-success w-100 fw-bold" @onclick="CreatePromoCode" disabled="@string.IsNullOrWhiteSpace(newPromoCode)">Створити код</button>
+            </div>
+        </div>
+        
+        <div class="col-md-7">
+            <div class="card shadow-sm border-0 rounded-4 overflow-hidden h-100">
+                <div class="card-header bg-white p-3 border-bottom-0"><h5 class="fw-bold mb-0 text-dark">Діючі промокоди</h5></div>
+                <div class="card-body p-0">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-dark">
+                            <tr><th>Код</th><th>Знижка</th><th>Статус</th><th class="text-end px-4">Дії</th></tr>
+                        </thead>
+                        <tbody>
+                            @if (!promoCodes.Any()) { <tr><td colspan="4" class="text-center text-muted py-4">Промокоди ще не створені.</td></tr> }
+                            else { 
+                                @foreach (var pc in promoCodes) { 
+                                    <tr>
+                                        <td class="px-3"><span class="badge border border-primary text-primary px-2 py-1 fs-6">@pc.Code</span></td>
+                                        <td><strong>-@pc.DiscountPercentage%</strong></td>
+                                        <td>
+                                            @if(pc.IsActive) { <span class="badge bg-success">Активний</span> }
+                                            else { <span class="badge bg-secondary">Вимкнено</span> }
+                                        </td>
+                                        <td class="text-end px-3">
+                                            <button class="btn btn-sm @(pc.IsActive ? "btn-outline-warning" : "btn-outline-success") rounded-pill me-2" @onclick="() => TogglePromoStatus(pc)">
+                                                @(pc.IsActive ? "Вимкнути" : "Увімкнути")
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-danger rounded-pill" @onclick="() => DeletePromo(pc)">Видалити</button>
+                                        </td>
+                                    </tr> 
+                                } 
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 
 @if (activeTab == "users")
 {
@@ -211,18 +345,72 @@
 
 @code {
     private string activeTab = "users"; 
-    private List<User> users = new(); private List<Transport> transports = new(); private List<RentalSession> sessions = new(); private List<IssueReport> issueReports = new();
+    private List<User> users = new(); 
+    private List<Transport> transports = new(); 
+    private List<RentalSession> sessions = new(); 
+    private List<IssueReport> issueReports = new();
+    
+    // Змінні для нових таблиць
+    private List<Tariff> tariffs = new();
+    private List<PromoCode> promoCodes = new();
+
     private User? editingUser; private Transport? editingTransport; private RentalSession? editingSession;
     
+    // Змінні для конструктора тарифів
+    private string newTariffTarget = "Самокат"; 
+    private int newTariffDuration = 30;
+    private string newTariffUnit = "хв.";
+    private double newTariffPrice = 150;
+
+    // Змінні для промокодів
+    private string newPromoCode = "";
+    private int newPromoDiscount = 10;
+
     private int unresolvedIssues => issueReports.Count(r => !r.IsResolved);
 
     protected override async Task OnInitializedAsync() => await LoadData();
+    
     private async Task LoadData() { 
         users = await Db.Users.ToListAsync(); 
         transports = await Db.Transports.ToListAsync(); 
         sessions = await Db.RentalSessions.Include(s => s.User).Include(s => s.Transport).ToListAsync(); 
         issueReports = await Db.IssueReports.ToListAsync();
+        
+        // Завантаження нових даних
+        tariffs = await Db.Tariffs.ToListAsync();
+        promoCodes = await Db.PromoCodes.ToListAsync();
     }
+
+    // НОВА ЛОГІКА: ТАРИФИ ТА ПРОМОКОДИ
+    private async Task CreateTariff() {
+        if (newTariffDuration > 0 && newTariffPrice >= 0) {
+            // Формуємо красиву назву
+            string targetIcon = newTariffTarget == "Самокат" ? "🛴" : (newTariffTarget == "Велосипед" ? "🚲" : "✨");
+            string generatedName = $"{targetIcon} {newTariffTarget}: {newTariffDuration} {newTariffUnit}";
+            
+            Db.Tariffs.Add(new Tariff { Name = generatedName, Price = (decimal)newTariffPrice });
+            await Db.SaveChangesAsync();
+            
+            // Скидання форми
+            newTariffDuration = 30; 
+            newTariffUnit = "хв.";
+            newTariffPrice = 150;
+            await LoadData();
+        }
+    }
+    private async Task DeleteTariff(Tariff t) { Db.Tariffs.Remove(t); await Db.SaveChangesAsync(); await LoadData(); }
+
+    private async Task CreatePromoCode() {
+        if (!string.IsNullOrWhiteSpace(newPromoCode)) {
+            Db.PromoCodes.Add(new PromoCode { Code = newPromoCode.Trim().ToUpper(), DiscountPercentage = newPromoDiscount, IsActive = true });
+            await Db.SaveChangesAsync();
+            newPromoCode = ""; newPromoDiscount = 10;
+            await LoadData();
+        }
+    }
+    private async Task TogglePromoStatus(PromoCode p) { p.IsActive = !p.IsActive; Db.PromoCodes.Update(p); await Db.SaveChangesAsync(); await LoadData(); }
+    private async Task DeletePromo(PromoCode p) { Db.PromoCodes.Remove(p); await Db.SaveChangesAsync(); await LoadData(); }
+
 
     // КОРИСТУВАЧІ
     private string userSearchQuery = ""; private string userFilter = "all"; private string userSortCol = "ID"; private bool userSortAsc = true;

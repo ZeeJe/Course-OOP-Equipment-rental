@@ -4,6 +4,7 @@
 @using BlazorApp.Models
 @using Microsoft.EntityFrameworkCore
 @inject ApplicationDbContext Db
+@inject BlazorApp.Services.RentalService RentalSvc
 
 <PageTitle>Особистий кабінет</PageTitle>
 
@@ -76,33 +77,84 @@ else
         </div>
 
         <div class="col-md-7">
-            <div class="row g-3 h-100">
-                <div class="col-sm-6">
-                    <div class="card bg-info text-white border-0 shadow-sm h-100 rounded-4">
-                        <div class="card-body text-center d-flex flex-column justify-content-center">
-                            <h5 class="card-title">Усього поїздок</h5>
-                            <h2 class="display-5 fw-bold mb-0">@userSessions.Count</h2>
+            
+            @* --- ОНОВЛЕНИЙ БЛОК: СПИСОК АКТИВНИХ ПОЇЗДОК --- *@
+            @if (activeSessions.Any())
+            {
+                <div class="d-flex flex-column gap-3 mb-4">
+                    @foreach (var session in activeSessions)
+                    {
+                        <div class="card border-0 shadow-sm rounded-4 bg-primary text-white position-relative overflow-hidden">
+                            <div class="position-absolute top-0 end-0 p-3 opacity-25">
+                                <i class="bi bi-bicycle" style="font-size: 6rem;"></i>
+                            </div>
+                            <div class="card-body p-4 position-relative z-1">
+                                <div class="d-flex justify-content-between align-items-start mb-3">
+                                    <div class="d-flex align-items-center">
+                                        <span class="spinner-grow spinner-grow-sm text-warning me-2" role="status"></span>
+                                        <h5 class="fw-bold mb-0 text-warning">Поїздка триває!</h5>
+                                    </div>
+                                    <span class="badge bg-white text-primary rounded-pill">#@session.Id</span>
+                                </div>
+                                
+                                <h4 class="fw-bold mb-1">Транспорт #@session.Transport?.StateCode</h4>
+                                <p class="mb-3 opacity-75 small">Тариф: @session.TariffType</p>
+                                
+                                <div class="row g-2 mb-3">
+                                    <div class="col-6">
+                                        <div class="bg-white bg-opacity-10 rounded-3 p-2">
+                                            <small class="opacity-75 d-block" style="font-size: 0.7rem;">Час старту</small>
+                                            <strong>@session.StartTime</strong>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="bg-white bg-opacity-10 rounded-3 p-2">
+                                            <small class="opacity-75 d-block" style="font-size: 0.7rem;">Знижка</small>
+                                            <strong>@(session.DiscountPercent > 0 ? $"-{session.DiscountPercent}%" : "Немає")</strong>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <button class="btn btn-warning w-100 fw-bold rounded-pill text-dark shadow-sm" @onclick="() => EndMyRental(session)">
+                                    <i class="bi bi-stop-circle-fill me-2"></i>Завершити поїздку
+                                </button>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="row g-3 h-100">
+                    <div class="col-sm-6">
+                        <div class="card bg-info text-white border-0 shadow-sm h-100 rounded-4">
+                            <div class="card-body text-center d-flex flex-column justify-content-center">
+                                <h5 class="card-title">Усього поїздок</h5>
+                                <h2 class="display-5 fw-bold mb-0">@completedHistory.Count</h2>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="card bg-secondary text-white border-0 shadow-sm h-100 rounded-4">
+                            <div class="card-body text-center d-flex flex-column justify-content-center">
+                                <h5 class="card-title">Витрачено коштів</h5>
+                                <h2 class="display-5 fw-bold mb-0">@completedHistory.Sum(s => s.TotalCost ?? 0) ₴</h2>
+                            </div>
                         </div>
                     </div>
                 </div>
-                <div class="col-sm-6">
-                    <div class="card bg-secondary text-white border-0 shadow-sm h-100 rounded-4">
-                        <div class="card-body text-center d-flex flex-column justify-content-center">
-                            <h5 class="card-title">Витрачено коштів</h5>
-                            <h2 class="display-5 fw-bold mb-0">@userSessions.Sum(s => s.TotalCost ?? 0) ₴</h2>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            }
+            @* --- КІНЕЦЬ БЛОКУ АКТИВНОЇ ПОЇЗДКИ --- *@
+
         </div>
     </div>
 
     <h4 class="mb-3 fw-bold">Ваша історія поїздок</h4>
     <div class="card border-0 shadow-sm rounded-4 overflow-hidden mb-5">
-        @if (!userSessions.Any())
+        @if (!completedHistory.Any())
         {
             <div class="card-body text-center p-5 text-muted">
-                <h5>У вас ще немає поїздок.</h5>
+                <h5>У вас ще немає завершених поїздок.</h5>
                 <p>Перейдіть у вкладку "Інвентар", щоб орендувати свій перший транспорт!</p>
             </div>
         }
@@ -124,7 +176,7 @@ else
                             Час завершення <span class="bi @GetSortIcon("End") ms-1 text-muted" style="font-size: 0.8rem;"></span>
                         </th>
                         <th class="sortable-header text-end px-4" @onclick="@(() => Sort("Cost"))">
-                            Статус / Вартість <span class="bi @GetSortIcon("Cost") ms-1 text-muted" style="font-size: 0.8rem;"></span>
+                            Вартість <span class="bi @GetSortIcon("Cost") ms-1 text-muted" style="font-size: 0.8rem;"></span>
                         </th>
                     </tr>
                 </thead>
@@ -138,16 +190,9 @@ else
                                 <small class="text-muted">@(s.Transport is Scooter ? "Самокат" : "Велосипед")</small>
                             </td>
                             <td>@s.StartTime</td>
-                            <td>@(s.EndTime ?? "—")</td>
+                            <td>@s.EndTime</td>
                             <td class="text-end px-4">
-                                @if (string.IsNullOrEmpty(s.EndTime))
-                                {
-                                    <span class="badge bg-warning text-dark px-3 py-2 rounded-pill shadow-sm">В дорозі</span>
-                                }
-                                else
-                                {
-                                    <span class="fw-bold text-danger">- @s.TotalCost ₴</span>
-                                }
+                                <span class="fw-bold text-danger">- @s.TotalCost ₴</span>
                             </td>
                         </tr>
                     }
@@ -163,6 +208,10 @@ else
     
     private User? currentUser;
     private List<RentalSession> userSessions = new();
+    
+    // ОНОВЛЕНО: Тепер це список активних поїздок
+    private List<RentalSession> activeSessions = new();
+    private List<RentalSession> completedHistory = new();
     
     private double topUpAmount = 100; 
     private bool showSuccessMessage = false;
@@ -189,12 +238,31 @@ else
                     .Include(s => s.Transport)
                     .Where(s => s.UserId == SelectedUserId)
                     .ToListAsync();
+                    
+                // Шукаємо ВСІ поїздки, які ще не завершені
+                activeSessions = userSessions.Where(s => string.IsNullOrEmpty(s.EndTime)).ToList();
+                
+                // Всі завершені поїздки йдуть в історію
+                completedHistory = userSessions.Where(s => !string.IsNullOrEmpty(s.EndTime)).ToList();
             }
         }
         else
         {
             currentUser = null;
             userSessions.Clear();
+            completedHistory.Clear();
+            activeSessions.Clear();
+        }
+    }
+
+    // ОНОВЛЕНО: Метод приймає конкретну сесію для завершення
+    private async Task EndMyRental(RentalSession session)
+    {
+        if (session != null)
+        {
+            await RentalSvc.CompleteRental(session);
+            // Перезавантажуємо дані юзера, щоб оновити баланс і історію
+            await LoadUserData();
         }
     }
 
@@ -214,11 +282,11 @@ else
     private IEnumerable<RentalSession> GetSortedSessions()
     {
         return sortCol switch {
-            "Transport" => sortAsc ? userSessions.OrderBy(s => s.Transport?.StateCode) : userSessions.OrderByDescending(s => s.Transport?.StateCode),
-            "Start" => sortAsc ? userSessions.OrderBy(s => s.StartTime) : userSessions.OrderByDescending(s => s.StartTime),
-            "End" => sortAsc ? userSessions.OrderBy(s => s.EndTime) : userSessions.OrderByDescending(s => s.EndTime),
-            "Cost" => sortAsc ? userSessions.OrderBy(s => s.TotalCost ?? 0) : userSessions.OrderByDescending(s => s.TotalCost ?? 0),
-            _ => sortAsc ? userSessions.OrderBy(s => s.Id) : userSessions.OrderByDescending(s => s.Id)
+            "Transport" => sortAsc ? completedHistory.OrderBy(s => s.Transport?.StateCode) : completedHistory.OrderByDescending(s => s.Transport?.StateCode),
+            "Start" => sortAsc ? completedHistory.OrderBy(s => s.StartTime) : completedHistory.OrderByDescending(s => s.StartTime),
+            "End" => sortAsc ? completedHistory.OrderBy(s => s.EndTime) : completedHistory.OrderByDescending(s => s.EndTime),
+            "Cost" => sortAsc ? completedHistory.OrderBy(s => s.TotalCost ?? 0) : completedHistory.OrderByDescending(s => s.TotalCost ?? 0),
+            _ => sortAsc ? completedHistory.OrderBy(s => s.Id) : completedHistory.OrderByDescending(s => s.Id)
         };
     }
 

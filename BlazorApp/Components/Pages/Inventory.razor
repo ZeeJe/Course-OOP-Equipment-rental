@@ -68,11 +68,17 @@
                 <label class="form-label fw-bold">Оберіть тариф:</label>
                 <select class="form-select form-select-lg" @bind="selectedTariff">
                     <option value="">-- Виберіть тариф --</option>
-                    <option value="30m">30 хвилин (90 грн)</option>
-                    <option value="1h">1 година (150 грн) Вигідно</option>
-                    <option value="12h">12 годин (1000 грн)</option>
-                    <option value="24h">24 години (1500 грн)</option>
-                    <option value="1m">1 місяць (10000 грн) Максимум</option>
+                    @if (GetAvailableTariffs().Any())
+                    {
+                        @foreach (var tariff in GetAvailableTariffs())
+                        {
+                            <option value="@tariff.Name">@tariff.Name (@tariff.Price грн)</option>
+                        }
+                    }
+                    else
+                    {
+                        <option value="" disabled>Немає тарифів для цього транспорту</option>
+                    }
                 </select>
                 <small class="text-muted text-danger" style="font-size: 0.75rem;">*При достроковому завершенні кошти не повертаються</small>
             </div>
@@ -88,7 +94,7 @@
                     <i class="bi bi-exclamation-triangle-fill me-2"></i> @rentErrorMessage
                 </div>
             }
-            
+
             @if (issueSubmittedSuccess)
             {
                 <div class="alert alert-success text-center rounded-3 p-2 mb-3">Дякуємо! Скарга відправлена.</div>
@@ -177,61 +183,6 @@
     }
 </div>
 
-<div class="card shadow-sm border-0 rounded-4 overflow-hidden mb-5">
-    <div class="card-header bg-white p-3 d-flex justify-content-between align-items-center" style="cursor: pointer;" @onclick="ToggleSessionsTable">
-        <h4 class="fw-bold mb-0 text-dark d-flex align-items-center">
-            <span class="bi @(isSessionsTableExpanded ? "bi-chevron-down" : "bi-chevron-right") text-primary me-3"></span> Активні та завершені поїздки
-        </h4>
-    </div>
-    @if (isSessionsTableExpanded)
-    {
-        <div class="card-body p-0">
-            @if (sessions != null && sessions.Any())
-            {
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="table-light">
-                        <tr>
-                            <th class="sortable-header sortable-header-light px-4" @onclick="@(() => SortSessions("User"))">Клієнт <span class="bi @GetSessionSortIcon("User") ms-1 text-muted" style="font-size: 0.8rem;"></span></th>
-                            <th class="sortable-header sortable-header-light" @onclick="@(() => SortSessions("Transport"))">Транспорт <span class="bi @GetSessionSortIcon("Transport") ms-1 text-muted" style="font-size: 0.8rem;"></span></th>
-                            <th>Тариф</th>
-                            <th class="sortable-header sortable-header-light" @onclick="@(() => SortSessions("Start"))">Час початку <span class="bi @GetSessionSortIcon("Start") ms-1 text-muted" style="font-size: 0.8rem;"></span></th>
-                            <th class="sortable-header sortable-header-light text-end px-4" @onclick="@(() => SortSessions("Status"))">Статус <span class="bi @GetSessionSortIcon("Status") ms-1 text-muted" style="font-size: 0.8rem;"></span></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var s in GetSortedSessions())
-                        {
-                            <tr>
-                                <td class="px-4"><strong>@(s.User?.Name ?? "Невідомо")</strong></td>
-                                <td><span class="badge bg-secondary">@(s.Transport?.StateCode ?? "Невідомо")</span></td>
-                                <td>
-                                    @if(!string.IsNullOrEmpty(s.TariffType)) {
-                                        <span class="badge bg-info text-dark">@s.TariffType</span>
-                                        @if(s.DiscountPercent > 0) { <span class="badge bg-success ms-1">-@s.DiscountPercent%</span> }
-                                    }
-                                </td>
-                                <td>@s.StartTime</td>
-                                <td class="text-end px-4">
-                                    @if (string.IsNullOrEmpty(s.EndTime))
-                                    {
-                                        <span class="badge bg-warning text-dark me-2">В оренді</span>
-                                        <button class="btn btn-sm btn-danger rounded-pill px-3" @onclick="() => EndRental(s)">Завершити</button>
-                                    }
-                                    else
-                                    {
-                                        <span class="badge bg-light text-dark border me-2">Завершено (@s.EndTime)</span>
-                                        <strong class="text-success">@s.TotalCost грн</strong>
-                                    }
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            }
-        </div>
-    }
-</div>
-
 @code {
     [Parameter]
     [SupplyParameterFromQuery(Name = "rent")]
@@ -240,6 +191,7 @@
     private List<Transport>? transports;
     private List<User> users = new();
     private List<RentalSession> sessions = new();
+    private List<Tariff> tariffs = new();
     private string mapFilter = "all"; 
     private DotNetObjectReference<Inventory>? objRef; 
 
@@ -248,15 +200,11 @@
     private bool isSortAscending = true;
     private int statusSortState = 0; 
 
-    private bool isSessionsTableExpanded = true;
-    private string sessionSortCol = "ID";
-    private bool sessionSortAsc = false;
-
     private Transport? transportToRent = null;
     private int selectedUserId = 0;
     private string selectedTariff = "";
     private string enteredPromoCode = "";
-    private string rentErrorMessage = ""; // <--- ДОДАЙ ОСЬ ЦЕЙ РЯДОК
+    private string rentErrorMessage = ""; 
     private bool CanRent => selectedUserId > 0 && !string.IsNullOrEmpty(selectedTariff);
 
     private bool showIssueForm = false;
@@ -292,6 +240,7 @@
         transports = await Db.Transports.ToListAsync();
         users = await Db.Users.ToListAsync();
         sessions = await Db.RentalSessions.Include(rs => rs.User).Include(rs => rs.Transport).ToListAsync();
+        tariffs = await Db.Tariffs.ToListAsync();
     }
 
     private void ToggleTable() => isTableExpanded = !isTableExpanded;
@@ -335,20 +284,16 @@
         };
     }
 
-    private void ToggleSessionsTable() => isSessionsTableExpanded = !isSessionsTableExpanded;
-    private void SortSessions(string col) { if (sessionSortCol == col) sessionSortAsc = !sessionSortAsc; else { sessionSortCol = col; sessionSortAsc = true; } }
-    private string GetSessionSortIcon(string colName) { if (sessionSortCol != colName) return "bi-arrow-down-up"; return sessionSortAsc ? "bi-arrow-up" : "bi-arrow-down"; }
-
-    private IEnumerable<RentalSession> GetSortedSessions()
+    // РОЗУМНИЙ ФІЛЬТР ТАРИФІВ
+    private IEnumerable<Tariff> GetAvailableTariffs()
     {
-        if (sessions == null) return Enumerable.Empty<RentalSession>();
-        return sessionSortCol switch {
-            "User" => sessionSortAsc ? sessions.OrderBy(s => s.User?.Name) : sessions.OrderByDescending(s => s.User?.Name),
-            "Transport" => sessionSortAsc ? sessions.OrderBy(s => s.Transport?.StateCode) : sessions.OrderByDescending(s => s.Transport?.StateCode),
-            "Start" => sessionSortAsc ? sessions.OrderBy(s => s.StartTime) : sessions.OrderByDescending(s => s.StartTime),
-            "Status" => sessionSortAsc ? sessions.OrderBy(s => string.IsNullOrEmpty(s.EndTime) ? "0" : "1").ThenBy(s => s.EndTime) : sessions.OrderByDescending(s => string.IsNullOrEmpty(s.EndTime) ? "0" : "1").ThenByDescending(s => s.EndTime),
-            _ => sessionSortAsc ? sessions.OrderBy(s => s.Id) : sessions.OrderByDescending(s => s.Id)
-        };
+        if (tariffs == null || transportToRent == null) return Enumerable.Empty<Tariff>();
+
+        return tariffs.Where(t => 
+            t.Name.Contains("Універсальний") || 
+            (transportToRent is Scooter && t.Name.Contains("Самокат")) || 
+            (transportToRent is Bicycle && t.Name.Contains("Велосипед"))
+        );
     }
 
     private async Task ChangeMapFilter(string filter) { mapFilter = filter; await UpdateMap(); }
@@ -401,7 +346,7 @@
         showIssueForm = false; 
         issueSubmittedSuccess = false; 
         issueDescription = ""; 
-        rentErrorMessage = ""; // <--- ДОДАЙ ОСЬ ЦЕЙ РЯДОК
+        rentErrorMessage = ""; 
     }
     
     private void CancelRent() => transportToRent = null;
@@ -409,7 +354,7 @@
     // ПІДТВЕРДЖЕННЯ ОРЕНДИ ТА ПРОМОКОДИ
     private async Task ConfirmRent()
     {
-        rentErrorMessage = ""; // Очищаємо помилку перед новою спробою
+        rentErrorMessage = ""; 
 
         if (transportToRent != null && CanRent) 
         { 
@@ -418,31 +363,34 @@
                 int discount = 0;
                 string code = enteredPromoCode.Trim().ToUpper();
                 
-                // База промокодів
-                if (code == "STUDENT20") { discount = 20; }
-                else if (code == "OOP100") { discount = 100; } 
-                else if (code == "ZELENSKY50") { discount = 50; }
+                // ДИНАМІЧНА ПЕРЕВІРКА ПРОМОКОДУ З БАЗИ ДАНИХ
+                if (!string.IsNullOrEmpty(code))
+                {
+                    var validPromo = await Db.PromoCodes.FirstOrDefaultAsync(p => p.Code == code && p.IsActive);
+                    
+                    if (validPromo != null)
+                    {
+                        discount = validPromo.DiscountPercentage;
+                    }
+                    else
+                    {
+                        rentErrorMessage = "Невірний або неактивний промокод!";
+                        return; // Зупиняємо оренду, якщо код неправильний
+                    }
+                }
 
-                // Якщо тут грошей не вистачає - бекенд викине помилку і код перестрибне в блок catch
+                // Якщо грошей не вистачає або юзер вже юзав промокод - бекенд викине помилку
                 await RentalSvc.ProcessRental(selectedUserId, transportToRent.Id, selectedTariff, discount);
                 
-                // Якщо все успішно:
                 transportToRent = null; 
                 enteredPromoCode = ""; 
                 await LoadData(); 
             }
             catch (Exception ex)
             {
-                // ЛОВИМО ПОМИЛКУ: Замість зависання екрану, ми записуємо текст помилки в змінну
                 rentErrorMessage = ex.Message;
             }
         }
-    }
-
-    private async Task EndRental(RentalSession session)
-    {
-        await RentalSvc.CompleteRental(session);
-        await LoadData();
     }
 
     private void ToggleIssueForm() 
