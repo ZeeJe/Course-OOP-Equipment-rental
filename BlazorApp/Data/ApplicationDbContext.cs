@@ -15,6 +15,8 @@ namespace BlazorApp.Data
         public DbSet<Scooter> Scooters { get; set; }
         public DbSet<RentalSession> RentalSessions { get; set; }
         public DbSet<IssueReport> IssueReports { get; set; }
+        public DbSet<PromoCode> PromoCodes { get; set; }
+        public DbSet<Tariff> Tariffs { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
