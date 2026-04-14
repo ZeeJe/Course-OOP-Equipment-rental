@@ -1,0 +1,35 @@
+name: .NET CI/CD Pipeline
+
+# Цей блок вказує, КОЛИ запускати перевірку (при пуші в гілку main або master)
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest # Запускаємо на віртуальному сервері з Linux
+
+    steps:
+    # 1. Клонуємо твій репозиторій на сервер
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    # 2. Встановлюємо .NET 10 (як у тебе на комп'ютері)
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '10.0.x' 
+
+    # 3. Завантажуємо всі необхідні пакети (NuGet)
+    - name: Restore dependencies
+      run: dotnet restore
+
+    # 4. Збираємо проєкт (робимо Build)
+    - name: Build project
+      run: dotnet build --no-restore --configuration Release
+
+    # 5. ЗАПУСКАЄМО ЮНІТ-ТЕСТИ! 
+    - name: Run Unit Tests
+      run: dotnet test --no-build --configuration Release --verbosity normal
