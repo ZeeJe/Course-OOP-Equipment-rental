@@ -81,17 +81,32 @@ namespace BlazorApp.Services
                 _db.Users.Update(session.User); // Оновлюємо баланс
             }
 
-            _db.RentalSessions.Update(session);
-            
-            // Оновлюємо транспорт
+            // Застосовуємо State паттерн - викликаємо HandleReturn()
             if (session.Transport != null)
             {
+                // Визначаємо поточний стан транспорту
+                ITransportState currentState = session.Transport.StateCode switch
+                {
+                    "Available" => new AvailableState(),
+                    "InUse" => new InUseState(),
+                    "Maintenance" => new MaintenanceState(),
+                    _ => new InUseState() // За замовчуванням вважаємо в оренді
+                };
+
+                // Викликаємо HandleReturn для зміни стану
+                await currentState.HandleReturn(session.Transport);
+                
+                // Оновлюємо стан на Available після повернення
+                session.Transport.StateCode = "Available";
                 await _transportRepo.UpdateTransportAsync(session.Transport);
             }
             else
             {
                 await _db.SaveChangesAsync();
             }
+
+            _db.RentalSessions.Update(session);
+            await _db.SaveChangesAsync();
         }
     }
 }
